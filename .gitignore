@@ -1,0 +1,10 @@
+# Journaux rapatriés des VM
+tests/logs/
+# Réglages personnels de Claude Code
+.claude/settings.local.json
+# Au cas où : jamais de secrets dans le dépôt
+*.clixml
+**/.lab/
+itflow-key.xml
+itflow-config.json
+.env

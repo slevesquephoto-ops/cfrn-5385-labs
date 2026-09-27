@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(~/.lab/**)",
+      "Edit(~/.lab/**)",
+      "PowerShell(Remove-VM *)",
+      "PowerShell(Remove-VMSwitch *)",
+      "PowerShell(Remove-VMSnapshot *)",
+      "PowerShell(Remove-VMCheckpoint *)",
+      "PowerShell(Restore-VMSnapshot *)",
+      "PowerShell(Restore-VMCheckpoint *)",
+      "PowerShell(Stop-VM *)",
+      "PowerShell(Set-VM *)",
+      "PowerShell(Invoke-Command *)",
+      "PowerShell(Enter-PSSession *)",
+      "PowerShell(New-PSSession *)",
+      "PowerShell(Import-Clixml *)",
+      "PowerShell(Invoke-RestMethod *)",
+      "PowerShell(Invoke-WebRequest *)",
+      "PowerShell(git push *)"
+    ],
+    "ask": [
+      "PowerShell(Checkpoint-VM *)",
+      "PowerShell(Start-VM *)"
+    ],
+    "allow": [
+      "PowerShell(Get-VM *)",
+      "PowerShell(Get-VMSnapshot *)",
+      "PowerShell(Invoke-ScriptAnalyzer *)",
+      "PowerShell(git status *)",
+      "PowerShell(git diff *)",
+      "PowerShell(git add *)",
+      "PowerShell(git commit *)"
+    ]
+  }
+}
