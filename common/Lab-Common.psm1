@@ -47,13 +47,41 @@ function Assert-LabComputer {
 $script:LabDataRoot = 'C:\ProgramData\CFRN-Lab'
 if ($env:ProgramData) { $script:LabDataRoot = Join-Path $env:ProgramData 'CFRN-Lab' }
 
+function Protect-LabDataPath {
+    <#
+    Réserve le dossier de travail aux Administrateurs et à SYSTEM (héritage coupé) :
+    un utilisateur standard ne doit pas pouvoir y lire l'état des pannes.
+    SID plutôt que noms : Windows est en français sur les postes.
+    #>
+    param([Parameter(Mandatory)][string]$Path)
+    $admins = New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')
+    $system = New-Object Security.Principal.SecurityIdentifier('S-1-5-18')
+    $acl = Get-Acl -LiteralPath $Path
+    $expected = @($admins.Value, $system.Value)
+    $current = @($acl.Access | ForEach-Object { $_.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value } | Sort-Object -Unique)
+    if ($acl.AreAccessRulesProtected -and (($current -join ',') -eq (($expected | Sort-Object) -join ','))) { return }
+    $new = New-Object Security.AccessControl.DirectorySecurity
+    $new.SetAccessRuleProtection($true, $false)
+    $new.SetOwner($admins)
+    $inherit = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+    foreach ($sid in @($admins, $system)) {
+        $rule = New-Object Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', $inherit, 'None', 'Allow')
+        $new.AddAccessRule($rule)
+    }
+    Set-Acl -LiteralPath $Path -AclObject $new
+}
+
 function Get-LabDataPath {
-    <# Retourne (et crée au besoin) le dossier caché de travail, ou un sous-dossier. #>
+    <#
+    Retourne (et crée au besoin) le dossier caché de travail, ou un sous-dossier.
+    En administrateur, le dossier est aussi réservé aux Administrateurs et à SYSTEM.
+    #>
     param([string]$Child)
     if (-not (Test-Path $script:LabDataRoot)) {
         $dir = New-Item -ItemType Directory -Path $script:LabDataRoot -Force
         $dir.Attributes = $dir.Attributes -bor [IO.FileAttributes]::Hidden
     }
+    if (Test-LabAdmin) { Protect-LabDataPath -Path $script:LabDataRoot }
     if ($Child) {
         $path = Join-Path $script:LabDataRoot $Child
         if (-not (Test-Path $path)) { New-Item -ItemType Directory -Path $path -Force | Out-Null }
@@ -264,17 +292,28 @@ function Complete-LabVerification {
     <#
     Écrit la ligne JSON du contrat et retourne le code de sortie attendu.
     $Checks : contrôles décrivant l'état PROPRE (ok = l'élément est propre).
-    Attendu Propre : tous ok. Attendu Panne : au moins un contrôle non ok.
+    Attendu Propre : tous ok. Attendu Panne : au moins un contrôle non ok, ou,
+    avec -EchecsAttendus, exactement ces contrôles-là en échec (ni plus, ni moins) :
+    une panne à moitié installée ou un dégât collatéral fait alors échouer.
     Usage : exit (Complete-LabVerification -Machine 'PC-03' -Attendu $Attendu -Checks $checks)
     #>
     param(
         [Parameter(Mandatory)][string]$Machine,
         [Parameter(Mandatory)][ValidateSet('Propre','Panne')][string]$Attendu,
-        [Parameter(Mandatory)][object[]]$Checks
+        [Parameter(Mandatory)][object[]]$Checks,
+        [string[]]$EchecsAttendus
     )
-    $allClean = -not ($Checks | Where-Object { -not $_.ok })
-    if ($Attendu -eq 'Propre') { $ok = [bool]$allClean } else { $ok = -not $allClean }
-    $result = [pscustomobject]@{ machine = $Machine; attendu = $Attendu; ok = $ok; controles = $Checks }
+    $failed = @($Checks | Where-Object { -not $_.ok } | ForEach-Object { $_.nom } | Sort-Object -Unique)
+    if ($Attendu -eq 'Propre') {
+        $ok = ($failed.Count -eq 0)
+    } elseif ($EchecsAttendus) {
+        $expected = @($EchecsAttendus | Sort-Object -Unique)
+        $ok = (($failed -join '|') -eq ($expected -join '|'))
+    } else {
+        $ok = ($failed.Count -gt 0)
+    }
+    $result = [pscustomobject]@{ machine = $Machine; attendu = $Attendu; ok = $ok; echecs = $failed; controles = $Checks }
+    if ($EchecsAttendus) { $result | Add-Member -NotePropertyName echecsAttendus -NotePropertyValue @($EchecsAttendus) }
     # Écrit directement sur la console pour ne pas polluer la valeur de retour
     [Console]::Out.WriteLine(($result | ConvertTo-Json -Depth 5 -Compress))
     if ($ok) { return 0 } else { return 1 }
