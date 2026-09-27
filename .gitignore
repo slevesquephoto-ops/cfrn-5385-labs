@@ -8,3 +8,5 @@ tests/logs/
 itflow-key.xml
 itflow-config.json
 .env
+# Installeurs téléchargés (tools/Get-ABInstallers.ps1), trop gros pour Git
+tools/installeurs/
