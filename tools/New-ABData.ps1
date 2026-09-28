@@ -31,6 +31,7 @@ $Inv = Join-Path $Repo 'tests\Invoke-LabVM.ps1'
 Import-Module (Join-Path $Repo 'common\Lab-Common.psm1') -Force
 Import-Module (Join-Path $Repo 'AB\AB-Lab.psm1') -Force
 . (Join-Path $PSScriptRoot 'ABData-Contenu.ps1')
+. (Join-Path $PSScriptRoot 'ABData-Macro.ps1')
 Add-Type -AssemblyName System.Drawing
 
 $Build = Join-Path $env:TEMP 'abdata'
@@ -50,6 +51,12 @@ function Format-Money([double]$v) { $v.ToString('N2', $Fr) + ' $' }
 function Esc([string]$s) { [Net.WebUtility]::HtmlEncode($s) }
 
 function New-Html([string]$Title, [string]$Body, [string]$Font = 'Liberation Sans') {
+    # Police de la charte (Montserrat) : l'import HTML de LibreOffice respecte <font face>,
+    # pas toujours le CSS; chaque bloc de texte reçoit donc sa balise (vérifié sur le modèle).
+    if ($Font -ne 'Liberation Sans') {
+        $Body = [regex]::Replace($Body, '(<(p|td|th|h1|h2|li)(\s[^>]*)?>)', "`$1<font face=`"$Font`">")
+        $Body = [regex]::Replace($Body, '(</(p|td|th|h1|h2|li)>)', '</font>$1')
+    }
     @"
 <!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><title>$(Esc $Title)</title>
 <style>body{font-family:'$Font',Arial,sans-serif;font-size:11pt;color:#222} h1{font-size:16pt;color:#1d4e5f} h2{font-size:13pt;color:#1d4e5f}
@@ -344,7 +351,9 @@ foreach ($d in $defs) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     switch ($d.Type) {
         { $_ -in 'odt', 'ott' -or ($_ -eq 'pdf' -and $d.Modele -notin 'plan-pdf') } {
-            $font = 'Liberation Sans'; if ($d.Modele -eq 'modele-facture') { $font = 'Montserrat' }
+            # Charte d'AB : Montserrat pour le modèle et pour les factures émises par AB (R6-D)
+            $font = 'Liberation Sans'
+            if ($d.Modele -eq 'modele-facture' -or ($d.Modele -eq 'facture' -and $d.P.Emetteur -eq 'Architecture Boréale')) { $font = 'Montserrat' }
             $src = Join-Path $dir "$base.html"
             [IO.File]::WriteAllText($src, (New-Html -Title $base -Body (Get-HtmlBody $d) -Font $font), $Utf8)
             $filter = @{ odt = 'odt:writer8'; ott = 'ott:writer8_template'; pdf = 'pdf:writer_pdf_Export' }[$d.Type]
@@ -410,7 +419,9 @@ foreach ($owner in ($defs | Select-Object -ExpandProperty Proprietaire -Unique))
         $dst = Join-Path $root "fichiers\$inner"
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
         Copy-Item -LiteralPath $src -Destination $dst -Force
-        $manifest += "fichiers\$inner;$($d.Cible);$($d.Cree.ToString('yyyy-MM-dd HH:mm:ss'));$($d.Modifie.ToString('yyyy-MM-dd HH:mm:ss'));$($d.Criticite)"
+        # Modèle de facture : macro de numérotation automatique (R6-E)
+        if ($d.Modele -eq 'modele-facture') { Add-ABTemplateMacro -Path $dst }
+        $manifest +="fichiers\$inner;$($d.Cible);$($d.Cree.ToString('yyyy-MM-dd HH:mm:ss'));$($d.Modifie.ToString('yyyy-MM-dd HH:mm:ss'));$($d.Criticite)"
     }
     [IO.File]::WriteAllLines((Join-Path $root "manifeste-$owner.csv"), $manifest, $Utf8Bom)
     Write-LabOK "$owner : $($manifest.Count - 1) fichiers"
