@@ -124,22 +124,56 @@ function Test-ABLibreOfficeUpdateDisabled {
     return ($state -ne 3 -and $state -ne 4)
 }
 
+function ConvertTo-ABPackedGuid {
+    <# {GUID} MSI -> forme « compressée » des clés Installer\Products (chaque segment inversé). #>
+    param([Parameter(Mandatory)][string]$Guid)
+    $g = $Guid.Trim('{}').Replace('-', '')
+    $rev = { param($s) -join ($s.ToCharArray()[($s.Length - 1)..0]) }
+    $out = (& $rev $g.Substring(0, 8)) + (& $rev $g.Substring(8, 4)) + (& $rev $g.Substring(12, 4))
+    for ($i = 16; $i -lt 32; $i += 2) { $out += $g[$i + 1] + $g[$i] }
+    return $out.ToUpper()
+}
+
+function Get-ABMsiSourceList {
+    <# Sources réseau et locales enregistrées pour un produit MSI installé pour la machine. #>
+    param([Parameter(Mandatory)][string]$ProductCode)
+    $key = "HKLM:\SOFTWARE\Classes\Installer\Products\$(ConvertTo-ABPackedGuid -Guid $ProductCode)\SourceList"
+    if (-not (Test-Path -LiteralPath $key)) { return @() }
+    $net = Join-Path $key 'Net'
+    $sources = @()
+    if (Test-Path -LiteralPath $net) {
+        $k = Get-Item -LiteralPath $net
+        foreach ($n in $k.GetValueNames()) { $sources += [string]$k.GetValue($n, $null, 'DoNotExpandEnvironmentNames') }
+    }
+    return @($sources | ForEach-Object { $_.TrimEnd('\') })
+}
+
 # ---------------------------------------------------------------------------
 # Windows Update : version de Windows verrouillée (sécurité toujours active)
 # ---------------------------------------------------------------------------
 $script:WUPolicyKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
 $script:WUAUKey = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU'
 
+function Get-ABWindowsTargetVersion {
+    <# Version de Windows verrouillée pour une machine (SRV-01, PC-01..PC-04). #>
+    param([Parameter(Mandatory)][string]$Machine)
+    $v = (Get-ABConfig).WindowsUpdate.Version[$Machine]
+    if (-not $v) { throw "Aucune version Windows prévue pour $Machine dans AB-Config.psd1." }
+    return $v
+}
+
 function Set-ABWindowsUpdateLock {
+    param([Parameter(Mandatory)][string]$Machine)
     $wu = (Get-ABConfig).WindowsUpdate
     Set-LabRegistryValue -Path $script:WUPolicyKey -Name 'TargetReleaseVersion' -Value 1 -Type DWord
     Set-LabRegistryValue -Path $script:WUPolicyKey -Name 'ProductVersion' -Value $wu.ProductVersion -Type String
-    Set-LabRegistryValue -Path $script:WUPolicyKey -Name 'TargetReleaseVersionInfo' -Value $wu.TargetReleaseVersionInfo -Type String
+    Set-LabRegistryValue -Path $script:WUPolicyKey -Name 'TargetReleaseVersionInfo' -Value (Get-ABWindowsTargetVersion -Machine $Machine) -Type String
 }
 
 function Test-ABWindowsUpdateLock {
     <# Retourne un contrôle New-LabCheck 'windows-update'. #>
-    $wu = (Get-ABConfig).WindowsUpdate
+    param([Parameter(Mandatory)][string]$Machine)
+    $wu = @{ ProductVersion = (Get-ABConfig).WindowsUpdate.ProductVersion; TargetReleaseVersionInfo = (Get-ABWindowsTargetVersion -Machine $Machine) }
     $problems = @()
     $trv = Get-LabRegistrySnapshot -Path $script:WUPolicyKey -Name 'TargetReleaseVersion'
     $pv = Get-LabRegistrySnapshot -Path $script:WUPolicyKey -Name 'ProductVersion'

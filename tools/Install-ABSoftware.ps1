@@ -36,6 +36,7 @@ Import-Module (Join-Path $PSScriptRoot '..\AB\AB-Lab.psm1') -Force
 
 # Codes de sortie d'installeur considérés comme réussis (3010/1641 : redémarrage requis)
 $SuccessCodes = @(0, 3010, 1641)
+$script:TimeoutMs = $TimeoutMinutes * 60 * 1000
 $RebootCodes = @(3010, 1641)
 
 function Get-WingetPath {
@@ -68,8 +69,8 @@ function Wait-Installer {
     #>
     param([Diagnostics.Process]$Process, [string]$Name)
     $null = $Process.Handle   # sans ce handle, ExitCode reste vide en 5.1 (Start-Process sans -Wait)
-    if (-not $Process.WaitForExit($TimeoutMinutes * 60 * 1000)) {
-        Write-LabWarn "$Name : aucune fin après $TimeoutMinutes min (fenêtre en attente?). Installation arrêtée."
+    if (-not $Process.WaitForExit($script:TimeoutMs)) {
+        Write-LabWarn "$Name : aucune fin après $($script:TimeoutMs / 60000) min (fenêtre en attente?). Installation arrêtée."
         Stop-ProcessTree -ProcessId $Process.Id
         return -2
     }
@@ -225,6 +226,14 @@ try {
             } else {
                 Write-LabWarn "LibreOffice : la fonction de mise à jour est encore installée (journal : $loLog)."
                 $exitCode = 1
+            }
+            # Source de réparation sur le serveur (R6-C), ajoutée par SOURCELIST à l'installation
+            $sources = Get-ABMsiSourceList -ProductCode $loFound.ProductCode
+            if ($lo['DossierServeur'] -and -not ($sources -match 'Logiciels\$')) {
+                Write-LabWarn "LibreOffice : source réseau absente de la liste MSI ($($sources -join ' ; '))."
+                $exitCode = 1
+            } else {
+                Write-LabOK "LibreOffice : sources MSI = $($sources -join ' ; ')"
             }
         }
     }

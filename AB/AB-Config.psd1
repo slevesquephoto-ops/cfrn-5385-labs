@@ -51,7 +51,18 @@
         @{ Nom = 'Commun';         Dossier = 'C:\AB\Commun';         Lecteur = 'S'; Droits = @{ 'AB-Tous' = 'Modification' } }
         # ab-tech explicite : par le réseau, son jeton d'administrateur local est filtré (UAC).
         @{ Nom = 'Sauvegardes$';   Dossier = 'C:\AB\Sauvegardes';    Lecteur = '';  Droits = @{ 'ab-tech' = 'Modification' } }
+        # Source MSI de LibreOffice (R6-C) : LibreOffice\<installeur>, copié par Setup-SRV-01.
+        @{ Nom = 'Logiciels$';     Dossier = 'C:\AB\Logiciels';      Lecteur = '';  Droits = @{ 'AB-Tous' = 'Lecture' } }
     )
+
+    # Politique de mots de passe AB (stratégie de sécurité locale).
+    # Verrouillage : 0 = désactivé (SRV-01, décision R1); absent = défaut Windows (postes).
+    PolitiqueMotsDePasse = @{
+        LongueurMinimale = 12
+        Complexite       = 1
+        Historique       = 5
+        Verrouillage     = @{ 'SRV-01' = 0 }
+    }
 
     Pannes = @{
         R1 = @{
@@ -62,9 +73,16 @@
     }
 
     # Verrouillage de la version de Windows (les mises à jour de sécurité restent actives).
+    # Version par machine : le vrai HP (SRV-01) est en 25H2, les M700 en 24H2.
     WindowsUpdate = @{
-        ProductVersion          = 'Windows 11'
-        TargetReleaseVersionInfo = '24H2'
+        ProductVersion = 'Windows 11'
+        Version        = @{
+            'SRV-01' = '25H2'
+            'PC-01'  = '24H2'
+            'PC-02'  = '24H2'
+            'PC-03'  = '24H2'
+            'PC-04'  = '24H2'
+        }
     }
 
     # -----------------------------------------------------------------------
@@ -100,11 +118,13 @@
             Version    = '26.8.0.3'
             Type       = 'msi'
             Detection  = '^LibreOffice [\d.]+$'
-            Arguments  = '/qn /norestart ALLUSERS=1 ISCHECKFORPRODUCTUPDATES=0 QUICKSTART=0 CREATEDESKTOPLINK=0 RebootYesNo=No /l*v "{LOG}"'
+            Arguments  = '/qn /norestart ALLUSERS=1 ISCHECKFORPRODUCTUPDATES=0 QUICKSTART=0 CREATEDESKTOPLINK=0 RebootYesNo=No SOURCELIST=\\AB-SRV-01\Logiciels$\LibreOffice /l*v "{LOG}"'
             Url        = 'https://download.documentfoundation.org/libreoffice/stable/26.8.0/win/x86_64/LibreOffice_26.8.0_Win_x86-64.msi'
             Sha256     = '4aa6c6e1895f4055104effcb556bd3362d20c6ad707c149543304f395ef9db95'
             Fichier    = 'LibreOffice_26.8.0_Win_x86-64.msi'
             Raccourcis = @('LibreOffice*.lnk')
+            # Copié par Setup-SRV-01 dans C:\AB\Logiciels\<DossierServeur> (source de réparation, R6-C)
+            DossierServeur = 'LibreOffice'
         }
         @{
             Nom        = 'Adobe Acrobat Reader'
@@ -138,7 +158,7 @@
             # Installeur complet hors ligne à déposer à la main dans tools\installeurs\DWGTrueView2027\
             # (le paquet winget n'est qu'une amorce web graphique). Actif = $false pour le retirer.
             Nom        = 'Autodesk DWG TrueView 2027'
-            Actif      = $true
+            Actif      = $false   # retiré (spec) : installeur hors ligne non disponible
             Postes     = @('PC-02', 'PC-03', 'PC-04')
             WingetId   = 'Autodesk.DWGTrueView.2027'
             Winget     = $false

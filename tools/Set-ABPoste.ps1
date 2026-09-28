@@ -36,8 +36,8 @@ try {
     Assert-LabComputer -Expected "AB-$Poste" -Force:$Force
 
     Write-LabStep 'Windows Update : version verrouillée'
-    Set-ABWindowsUpdateLock
-    $check = Test-ABWindowsUpdateLock
+    Set-ABWindowsUpdateLock -Machine $Poste
+    $check = Test-ABWindowsUpdateLock -Machine $Poste
     if ($check.ok) { Write-LabOK $check.detail } else { Write-LabWarn $check.detail; $exitCode = 1 }
 } catch {
     Write-LabWarn $_.Exception.Message
