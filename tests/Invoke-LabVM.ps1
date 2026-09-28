@@ -107,8 +107,24 @@ switch ($Action) {
     'Reset' {
         $snap = Get-VMSnapshot -VMName $VMName -Name $Checkpoint -ErrorAction SilentlyContinue
         if (-not $snap) { throw "Point de contrôle '$Checkpoint' absent sur $VMName. L'enseignant doit le créer." }
+        # VM AB : le point de contrôle remet l'ancienne connexion réseau; on rebranche ensuite
+        # la VM sur le commutateur interne AB (nom dans AB\AB-Config.psd1). Vérifié AVANT la
+        # restauration : sans ce commutateur, on s'arrête au lieu de tester sur le mauvais réseau.
+        $abSwitch = $null
+        if ($VMName -like 'AB-*-T') {
+            $abSwitch = (Import-PowerShellDataFile (Join-Path $RepoRoot 'AB\AB-Config.psd1')).Tests.Commutateur
+            if (-not $abSwitch) { throw "Tests.Commutateur absent de AB\AB-Config.psd1." }
+            if (-not (Get-VMSwitch -Name $abSwitch -ErrorAction SilentlyContinue)) {
+                throw "Le commutateur '$abSwitch' n'existe pas : Reset arrêté (la VM resterait sur un autre réseau). Voir DEMARRAGE.md, étape 3."
+            }
+        }
         Write-Host "Restauration de $VMName au point '$Checkpoint'..."
         Restore-VMSnapshot -VMSnapshot $snap -Confirm:$false
+        if ($abSwitch) {
+            Get-VMNetworkAdapter -VMName $VMName | Connect-VMNetworkAdapter -SwitchName $abSwitch
+            Get-VMNetworkAdapter -VMName $VMName | ForEach-Object { Write-Host "  Carte '$($_.Name)' ($($_.MacAddress)) -> $($_.SwitchName)" }
+            if (Get-VMNetworkAdapter -VMName $VMName | Where-Object { $_.SwitchName -ne $abSwitch }) { throw "Une carte de $VMName n'est pas sur $abSwitch." }
+        }
         if ((Get-VM -Name $VMName).State -ne 'Running') { Start-VM -Name $VMName }
         Wait-GuestReady -Credential (Get-GuestCredential)
         Write-Host "[OK] $VMName prête."
