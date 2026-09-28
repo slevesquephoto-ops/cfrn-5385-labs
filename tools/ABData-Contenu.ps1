@@ -99,6 +99,12 @@ function Get-ABDataDefinition {
     & $add (D $o 'Downloads\Formulaire d''inscription au congrès.pdf' pdf note-pdf @{ Titre = 'Formulaire d''inscription'; Puces = @('Nom : Louis-Philippe Gauthier', 'Cabinet : Architecture Boréale', 'Statut : conférencier', 'Courriel : lpgauthier@architecture-boreale.example') } '2026-06-02 21:15' '2026-06-02 21:15')
     & $add (D $o 'Downloads\Catalogue fenêtres 2026.pdf' pdf note-pdf @{ Titre = 'Fenêtres Nordiques : catalogue 2026 (fictif)'; Puces = @('Série Boréa : triple vitrage, U = 0,80', 'Série Littoral : cadre en aluminium hybride', 'Délais de livraison : 8 à 10 semaines') } '2026-05-11 13:20' '2026-05-11 13:20')
     & $add (D $o 'Downloads\Facture hôtel congrès.pdf' pdf facture @{ Numero = 'H-55821'; Emetteur = 'Hôtel du Havre (fictif)'; Client = 'Louis-Philippe Gauthier'; Date = '26 septembre 2026'; Lignes = @(@('Chambre, 2 nuits', 398.00), @('Stationnement', 36.00)) } '2026-09-26 18:05' '2026-09-26 18:05' 'Importante')
+    # Favoris Edge : piège de R3 (hors profil Documents; Critique = exigé par Verifier -R3)
+    & $add (D $o 'AppData\Local\Microsoft\Edge\User Data\Default\Bookmarks' edge favoris @{ Favoris = @(
+                @('Clients', @(@('Municipalité de Pointe-Blanche', 'https://pointe-blanche.example'), @('Coopérative de santé du Littoral', 'https://coop-littoral.example'), @('Ordre des architectes du Québec', 'https://oaq.example'))),
+                @('Fournisseurs', @(@('Fenêtres Nordiques', 'https://fenetres-nordiques.example'), @('Ingénierie Littoral Conseil', 'https://ilc.example'))),
+                @('Congrès 2026', @(@('Programme du congrès', 'https://congres-architecture.example/2026'), @('Hôtel du Havre', 'https://hotel-du-havre.example')))
+            ) } '2026-01-10 08:30' '2026-09-26 22:45' 'Critique')
 
     # ======================= jbouchard (Jérémie Bouchard, technicien) =======================
     $o = 'jbouchard'

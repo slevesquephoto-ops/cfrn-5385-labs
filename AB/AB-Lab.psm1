@@ -911,6 +911,180 @@ function Test-ABFont {
 }
 
 # ---------------------------------------------------------------------------
+# R4 : démarrage encombré et processus gourmand (couche logicielle), RAM
+# ---------------------------------------------------------------------------
+function Get-ABInstalledMemoryGo {
+    <# RAM physique installée, en Go (arrondi 0,1). Le Verifier la rapporte sans échouer. #>
+    [math]::Round((Get-CimInstance Win32_PhysicalMemory | Measure-Object Capacity -Sum).Sum / 1GB, 1)
+}
+
+function Get-ABRunKey {
+    param([Parameter(Mandatory)][string]$HiveRoot)
+    return (Join-Path $HiveRoot 'Software\Microsoft\Windows\CurrentVersion\Run')
+}
+
+$script:VbsInutile = @'
+' Utilitaire interne Architecture Boréale.
+' (fictif : ne fait rien d'utile, sert à alourdir le démarrage)
+WScript.Sleep 1500
+'@
+
+function Get-ABGreedyScript {
+    <# Contenu du script « gourmand » : retient environ MemoireMo de mémoire et dort. #>
+    param([Parameter(Mandatory)][int]$MemoireMo)
+    return @"
+# Indexeur de documents Architecture Boréale (fictif : retient de la mémoire, ralentit le poste)
+`$bloc = New-Object 'byte[]' ($MemoireMo * 1MB)
+for (`$i = 0; `$i -lt `$bloc.Length; `$i += 4096) { `$bloc[`$i] = 1 }
+while (`$true) { Start-Sleep -Seconds 60 }
+"@
+}
+
+function Add-ABStartupClutter {
+    <#
+    Installe la couche logicielle de R4 dans la session de lpgauthier : scripts inutiles et
+    script gourmand déposés dans %APPDATA%\<dossier>, valeurs Run dans la ruche, tâche
+    planifiée au logon. Retourne l'état d'origine (à enregistrer pour le Retrait).
+    #>
+    param([Parameter(Mandatory)][string]$Compte)
+    $r4 = (Get-ABConfig).Pannes.R4
+    $prof = (Get-CimInstance Win32_UserProfile -Filter "SID='$(Get-ABUserSid -Compte $Compte)'").LocalPath
+    if (-not $prof) { throw "Profil de $Compte absent." }
+    $scriptDir = Join-Path $prof "AppData\Roaming\$($r4.DossierScripts)"
+    $greedy = Join-Path $scriptDir $r4.ScriptGourmand
+    New-Item -ItemType Directory -Force -Path $scriptDir | Out-Null
+    Set-Content -LiteralPath (Join-Path $scriptDir 'assistant.vbs') -Value $script:VbsInutile -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $scriptDir 'synchro.vbs') -Value $script:VbsInutile -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $scriptDir $r4.Tache.Script) -Value $script:VbsInutile -Encoding ASCII
+    Set-Content -LiteralPath $greedy -Value (Get-ABGreedyScript -MemoireMo $r4.MemoireMo) -Encoding UTF8
+    & icacls.exe $scriptDir /setowner "$env:COMPUTERNAME\$Compte" /T /C /Q | Out-Null
+
+    # État : nom de chaque valeur Run et son état d'origine (sans le chemin de ruche, qui
+    # dépend du nom de montage; il est reconstruit au retrait).
+    $state = [ordered]@{ Compte = $Compte; ScriptDir = $scriptDir; Run = @(); Tache = $r4.Tache.Nom }
+    Invoke-ABUserHive -Compte $Compte -ScriptBlock {
+        param($Root)
+        $run = Get-ABRunKey -HiveRoot $Root
+        foreach ($nom in $r4.Demarrage.Keys) {
+            $snap = Get-LabRegistrySnapshot -Path $run -Name $nom
+            $state.Run += , ([ordered]@{ Name = $nom; Exists = $snap.Exists; Value = $snap.Value; Type = $snap.Type })
+            $cmd = $r4.Demarrage[$nom].Replace('{SCRIPT}', $greedy)
+            Set-LabRegistryValue -Path $run -Name $nom -Value $cmd -Type String
+        }
+    }
+    # Tâche au logon sous l'identité de lpgauthier (interactive, aucun mot de passe requis)
+    $principal = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$Compte" -LogonType Interactive -RunLevel Limited
+    $action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "`"$(Join-Path $scriptDir $r4.Tache.Script)`""
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:COMPUTERNAME\$Compte"
+    Register-ScheduledTask -TaskName $r4.Tache.Nom -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+    return $state
+}
+
+function Remove-ABStartupClutter {
+    <# Retire R4 depuis l'état enregistré par Add-ABStartupClutter (retrait exact). #>
+    param([Parameter(Mandatory)]$State)
+    $r4 = (Get-ABConfig).Pannes.R4
+    # Processus gourmand encore en cours (session de lpgauthier)
+    $greedy = Join-Path $State.ScriptDir $r4.ScriptGourmand
+    Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" |
+        Where-Object { $_.CommandLine -and $_.CommandLine -match [regex]::Escape($greedy) } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Unregister-ScheduledTask -TaskName $State.Tache -Confirm:$false -ErrorAction SilentlyContinue
+    Invoke-ABUserHive -Compte $State.Compte -ScriptBlock {
+        param($Root)
+        $run = Get-ABRunKey -HiveRoot $Root
+        foreach ($v in $State.Run) {
+            if ($v.Exists) { Set-LabRegistryValue -Path $run -Name $v.Name -Value $v.Value -Type $v.Type }
+            elseif (Test-Path -LiteralPath $run) { Remove-ItemProperty -LiteralPath $run -Name $v.Name -ErrorAction SilentlyContinue }
+        }
+    }
+    if (Test-Path -LiteralPath $State.ScriptDir) { Remove-Item -LiteralPath $State.ScriptDir -Recurse -Force }
+}
+
+function Test-ABStartupClutter {
+    <# Écarts R4 (vide = démarrage propre) : valeurs Run, tâche, dossier de scripts, processus gourmand. #>
+    param([Parameter(Mandatory)][string]$Compte)
+    $r4 = (Get-ABConfig).Pannes.R4
+    $problems = @()
+    $prof = (Get-CimInstance Win32_UserProfile -Filter "SID='$(Get-ABUserSid -Compte $Compte)'").LocalPath
+    if ($prof) {
+        $scriptDir = Join-Path $prof "AppData\Roaming\$($r4.DossierScripts)"
+        if (Test-Path -LiteralPath $scriptDir) { $problems += "dossier de scripts de démarrage présent : $scriptDir" }
+    }
+    if (Get-ScheduledTask -TaskName $r4.Tache.Nom -ErrorAction SilentlyContinue) { $problems += "tâche planifiée « $($r4.Tache.Nom) » présente" }
+    $hive = Mount-LabUserHive -UserName $Compte
+    try {
+        $run = Get-ABRunKey -HiveRoot $hive.Root
+        foreach ($nom in $r4.Demarrage.Keys) { if ((Get-LabRegistrySnapshot -Path $run -Name $nom).Exists) { $problems += "élément de démarrage « $nom » présent" } }
+    } finally { Dismount-LabUserHive -Hive $hive }
+    if ($prof) {
+        $greedy = Join-Path $prof "AppData\Roaming\$($r4.DossierScripts)\$($r4.ScriptGourmand)"
+        $running = @(Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine -match [regex]::Escape($greedy) })
+        if ($running) { $problems += "$($running.Count) processus gourmand en cours" }
+    }
+    return $problems
+}
+
+# ---------------------------------------------------------------------------
+# R2 (PC-04) : ordre de démarrage UEFI (panne physique, contrôle au mieux)
+# ---------------------------------------------------------------------------
+function Get-ABBootOrder {
+    <#
+    Tente de lire l'ordre de démarrage UEFI (bcdedit /enum firmware). Retourne
+    { Lisible; DisqueEnTete; Detail }. Si l'ordre n'est pas lisible de façon fiable
+    (fréquent en VM), Lisible = $false : le Verifier le signale en contrôle manuel.
+    #>
+    $illisible = { param($m) [pscustomobject]@{ Lisible = $false; DisqueEnTete = $false; Detail = "$m (à vérifier dans le microprogramme)" } }
+    $out = & bcdedit.exe /enum firmware 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $out) { return (& $illisible 'ordre de démarrage UEFI illisible ici') }
+    $text = $out -join "`n"
+    # Section {fwbootmgr} : displayorder = liste d'identificateurs ({bootmgr} ou GUID),
+    # sur plusieurs lignes indentées. Le premier est l'entrée de tête.
+    $order = [regex]::Match($text, '(?m)^displayorder\s+(\{[\w-]+\}(?:\s*\n\s+\{[\w-]+\})*)')
+    $ids = [regex]::Matches($order.Groups[1].Value, '\{[\w-]+\}') | ForEach-Object { $_.Value }
+    if (-not $ids) { return (& $illisible 'ordre de démarrage UEFI non déterminé') }
+    $premier = $ids[0]
+    # Description de l'entrée : {bootmgr} = « Windows Boot Manager » (disque système).
+    # Sections séparées par une ligne vide; on prend celle dont l'identificateur est le premier.
+    $esc = [regex]::Escape($premier)
+    $sec = @($text -split '\r?\n\s*\r?\n' | Where-Object { $_ -match "(?m)^identificateur\s+$esc\s*$" }) | Select-Object -First 1
+    $desc = [regex]::Match($sec, '(?m)^description\s+(.+)$').Groups[1].Value.Trim()
+    if (-not $desc) { return (& $illisible "première entrée $premier sans description") }
+    $reseau = $desc -match 'Network|R.seau|PXE'
+    $disque = -not $reseau -and ($desc -match 'Windows Boot Manager|Gestionnaire.*Windows|SCSI|SATA|NVMe|Disk|Disque|SSD|HDD')
+    return [pscustomobject]@{ Lisible = $true; DisqueEnTete = [bool]$disque; Detail = "première entrée de démarrage : $desc" }
+}
+
+# ---------------------------------------------------------------------------
+# R3 : sauvegarde des fichiers « Critique » (contrôle par hash)
+# ---------------------------------------------------------------------------
+function Test-ABBackup {
+    <#
+    Vérifie que les fichiers « Critique » d'un employé (manifeste) se retrouvent, avec le bon
+    hash, dans \\SERVEUR\Sauvegardes$\<compte>\<date la plus récente>. Écarts (vide = OK).
+    Lu par le réseau avec l'identité courante (ab-tech a le droit sur Sauvegardes$).
+    #>
+    param([Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][string]$ProfilePath, [Parameter(Mandatory)][string]$Manifest)
+    $cfg = Get-ABConfig
+    $r3 = $cfg.Pannes.R3
+    $problems = @()
+    $dest = "\\$($cfg.Reseau.Serveur)\$($r3.Partage)\$Compte"
+    if (-not (Test-Path -LiteralPath $dest)) { return @("aucune sauvegarde pour $Compte dans $dest") }
+    $jour = Get-ChildItem -LiteralPath $dest -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending | Select-Object -First 1
+    if (-not $jour) { return @("aucun dossier de sauvegarde daté dans $dest") }
+    $critiques = @(Import-Csv -LiteralPath $Manifest -Delimiter ';' -Encoding UTF8 | Where-Object { $_.Criticality -eq $r3.Criticite })
+    foreach ($r in $critiques) {
+        $src = Resolve-ABUserTarget -ProfilePath $ProfilePath -Target $r.TargetRelative
+        $leaf = Split-Path -Leaf $r.TargetRelative
+        $copie = @(Get-ChildItem -LiteralPath $jour.FullName -Recurse -File -Filter $leaf -ErrorAction SilentlyContinue)
+        if (-not (Test-Path -LiteralPath $src)) { $problems += "source absente : $src"; continue }
+        $hash = (Get-FileHash -LiteralPath $src).Hash
+        if (-not ($copie | Where-Object { (Get-FileHash -LiteralPath $_.FullName).Hash -eq $hash })) { $problems += "non sauvegardé (ou modifié) : $($r.TargetRelative)" }
+    }
+    return $problems
+}
+
+# ---------------------------------------------------------------------------
 # Orchestration et vérification
 # ---------------------------------------------------------------------------
 function Initialize-ABEmployeeProfile {

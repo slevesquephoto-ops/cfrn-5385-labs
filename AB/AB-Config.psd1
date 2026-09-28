@@ -117,6 +117,36 @@
             VerrouCompte = 'lpgauthier'
             VerrouPoste = 'AB-PC-02'
         }
+        # R3 (PC-02) : sauvegarde de lpgauthier avant congrès. Destination : partage caché
+        # Sauvegardes$ (ab-tech seulement), sous-dossier par compte et par date (fait par les
+        # élèves). Verifier -R3 contrôle que les fichiers « Critique » y sont, par hash.
+        R3 = @{
+            Compte      = 'lpgauthier'
+            Partage     = 'Sauvegardes$'
+            Criticite   = 'Critique'
+        }
+        # R4 (PC-02) : couche logicielle de la lenteur (démarrage encombré + processus gourmand).
+        # Éléments déposés dans la session de lpgauthier; noms plausibles, aucun indice « panne ».
+        # La couche matérielle (ajout de RAM) est manuelle : le Verifier rapporte la RAM sans échouer.
+        R4 = @{
+            Compte      = 'lpgauthier'
+            # Valeurs ajoutées à HKCU\...\Run (nom = commande, {SCRIPT} = script gourmand déposé)
+            Demarrage   = @{
+                'AssistantBureautique' = 'wscript.exe "%APPDATA%\Boreale\assistant.vbs"'
+                'SynchroProjets'       = 'wscript.exe "%APPDATA%\Boreale\synchro.vbs"'
+                'IndexationDocuments'  = 'powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File "{SCRIPT}"'
+            }
+            # Tâche planifiée au logon (nom plausible)
+            Tache       = @{
+                Nom     = 'Boreale-MiseAJour'
+                Script  = 'maj.vbs'
+            }
+            # Dossier des scripts fictifs, relatif à %APPDATA% du profil de lpgauthier
+            DossierScripts = 'Boreale'
+            # Script « gourmand » qui retient de la mémoire (déposé dans DossierScripts)
+            ScriptGourmand = 'indexeur.ps1'
+            MemoireMo      = 700
+        }
     }
 
     # Verrouillage de la version de Windows (les mises à jour de sécurité restent actives).

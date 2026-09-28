@@ -1,0 +1,124 @@
+{
+    "checksum":  "",
+    "roots":  {
+                  "bookmark_bar":  {
+                                       "children":  [
+                                                        {
+                                                            "children":  [
+                                                                             {
+                                                                                 "date_added":  "13380000000000000",
+                                                                                 "guid":  "bfe66049-ce31-421b-bae0-7c74392662a0",
+                                                                                 "id":  "101",
+                                                                                 "name":  "Municipalité de Pointe-Blanche",
+                                                                                 "type":  "url",
+                                                                                 "url":  "https://pointe-blanche.example"
+                                                                             },
+                                                                             {
+                                                                                 "date_added":  "13380000000000000",
+                                                                                 "guid":  "f8120c2e-d95c-4b58-bdc0-5b2556204c6a",
+                                                                                 "id":  "102",
+                                                                                 "name":  "Coopérative de santé du Littoral",
+                                                                                 "type":  "url",
+                                                                                 "url":  "https://coop-littoral.example"
+                                                                             },
+                                                                             {
+                                                                                 "date_added":  "13380000000000000",
+                                                                                 "guid":  "96984790-9df8-4edd-9454-9855cc034df7",
+                                                                                 "id":  "103",
+                                                                                 "name":  "Ordre des architectes du Québec",
+                                                                                 "type":  "url",
+                                                                                 "url":  "https://oaq.example"
+                                                                             }
+                                                                         ],
+                                                            "date_added":  "13380000000000000",
+                                                            "date_modified":  "13380000000000000",
+                                                            "guid":  "cb92491b-f775-4027-ab78-d2fe10ae4083",
+                                                            "id":  "104",
+                                                            "name":  "Clients",
+                                                            "type":  "folder"
+                                                        },
+                                                        {
+                                                            "children":  [
+                                                                             {
+                                                                                 "date_added":  "13380000000000000",
+                                                                                 "guid":  "5baa260a-729f-4c80-9a15-3039c36bb9e2",
+                                                                                 "id":  "105",
+                                                                                 "name":  "Fenêtres Nordiques",
+                                                                                 "type":  "url",
+                                                                                 "url":  "https://fenetres-nordiques.example"
+                                                                             },
+                                                                             {
+                                                                                 "date_added":  "13380000000000000",
+                                                                                 "guid":  "29253bee-87f8-4554-b545-2e81b67c4c8f",
+                                                                                 "id":  "106",
+                                                                                 "name":  "Ingénierie Littoral Conseil",
+                                                                                 "type":  "url",
+                                                                                 "url":  "https://ilc.example"
+                                                                             }
+                                                                         ],
+                                                            "date_added":  "13380000000000000",
+                                                            "date_modified":  "13380000000000000",
+                                                            "guid":  "5d14e384-fc29-40c8-9abc-f9deee4d0bd4",
+                                                            "id":  "107",
+                                                            "name":  "Fournisseurs",
+                                                            "type":  "folder"
+                                                        },
+                                                        {
+                                                            "children":  [
+                                                                             {
+                                                                                 "date_added":  "13380000000000000",
+                                                                                 "guid":  "2c240553-268d-4c19-974b-dea058bd57a1",
+                                                                                 "id":  "108",
+                                                                                 "name":  "Programme du congrès",
+                                                                                 "type":  "url",
+                                                                                 "url":  "https://congres-architecture.example/2026"
+                                                                             },
+                                                                             {
+                                                                                 "date_added":  "13380000000000000",
+                                                                                 "guid":  "1a632170-abe9-4acb-b619-7b42f2d44d33",
+                                                                                 "id":  "109",
+                                                                                 "name":  "Hôtel du Havre",
+                                                                                 "type":  "url",
+                                                                                 "url":  "https://hotel-du-havre.example"
+                                                                             }
+                                                                         ],
+                                                            "date_added":  "13380000000000000",
+                                                            "date_modified":  "13380000000000000",
+                                                            "guid":  "eeed21ca-436d-4da0-85de-18cdebd61be3",
+                                                            "id":  "110",
+                                                            "name":  "Congrès 2026",
+                                                            "type":  "folder"
+                                                        }
+                                                    ],
+                                       "date_added":  "13380000000000000",
+                                       "date_modified":  "13380000000000000",
+                                       "guid":  "46e56586-3fe6-47f1-ba48-2945986acdc7",
+                                       "id":  "1",
+                                       "name":  "Barre de favoris",
+                                       "type":  "folder"
+                                   },
+                  "other":  {
+                                "children":  [
+
+                                             ],
+                                "date_added":  "13380000000000000",
+                                "date_modified":  "13380000000000000",
+                                "guid":  "90b7e5c9-8418-419f-9846-b6d2cf825770",
+                                "id":  "2",
+                                "name":  "Autres favoris",
+                                "type":  "folder"
+                            },
+                  "synced":  {
+                                 "children":  [
+
+                                              ],
+                                 "date_added":  "13380000000000000",
+                                 "date_modified":  "13380000000000000",
+                                 "guid":  "94f51c03-56fd-4613-9a6e-c65c5cdd9db6",
+                                 "id":  "3",
+                                 "name":  "Favoris mobiles",
+                                 "type":  "folder"
+                             }
+              },
+    "version":  1
+}

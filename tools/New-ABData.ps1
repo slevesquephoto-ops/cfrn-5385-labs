@@ -314,6 +314,30 @@ function New-RenduPng([string]$Scene, [string]$Titre, [string]$Path) {
     $g.Dispose(); Save-Png $bmp $Path
 }
 
+function New-EdgeBookmarkFile($Groupes) {
+    # Fichier Bookmarks d'Edge (JSON). Horodatage WebKit (µs depuis 1601), valeur fixe et plausible.
+    $ts = '13380000000000000'
+    $id = 100
+    $dossiers = foreach ($g in $Groupes) {
+        $liens = foreach ($l in $g[1]) {
+            $id++
+            [ordered]@{ date_added = $ts; guid = [guid]::NewGuid().ToString(); id = "$id"; name = $l[0]; type = 'url'; url = $l[1] }
+        }
+        $id++
+        [ordered]@{ children = @($liens); date_added = $ts; date_modified = $ts; guid = [guid]::NewGuid().ToString(); id = "$id"; name = $g[0]; type = 'folder' }
+    }
+    $root = [ordered]@{
+        checksum = ''
+        roots    = [ordered]@{
+            bookmark_bar = [ordered]@{ children = @($dossiers); date_added = $ts; date_modified = $ts; guid = [guid]::NewGuid().ToString(); id = '1'; name = 'Barre de favoris'; type = 'folder' }
+            other        = [ordered]@{ children = @(); date_added = $ts; date_modified = $ts; guid = [guid]::NewGuid().ToString(); id = '2'; name = 'Autres favoris'; type = 'folder' }
+            synced       = [ordered]@{ children = @(); date_added = $ts; date_modified = $ts; guid = [guid]::NewGuid().ToString(); id = '3'; name = 'Favoris mobiles'; type = 'folder' }
+        }
+        version  = 1
+    }
+    return ($root | ConvertTo-Json -Depth 8)
+}
+
 function New-LogoPng([string]$Path, [int]$W = 800, [int]$H = 400, [switch]$Fond) {
     $bmp = New-Object System.Drawing.Bitmap($W, $H); $g = [System.Drawing.Graphics]::FromImage($bmp); $g.SmoothingMode = 'AntiAlias'
     $C = { param($h) [System.Drawing.ColorTranslator]::FromHtml($h) }
@@ -376,6 +400,9 @@ foreach ($d in $defs) {
         }
         'png' {
             if ($d.Modele -eq 'logo') { New-LogoPng -Path $final } else { New-RenduPng -Scene $d.P.Scene -Titre $d.P.Titre -Path $final }
+        }
+        'edge' {
+            [IO.File]::WriteAllText($final, (New-EdgeBookmarkFile $d.P.Favoris), $Utf8)
         }
         default { throw "Type inconnu : $($d.Type)" }
     }
