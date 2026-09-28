@@ -19,7 +19,9 @@
 param(
     [Parameter(Mandatory)][ValidatePattern('^AB-PC-0[1-4]-T$')][string]$VMName,
     [Parameter(Mandatory)][string]$Compte,
-    [int]$AttenteBureau = 75
+    [int]$AttenteBureau = 75,
+    # Le serveur est joignable : les lecteurs doivent répondre dans la session
+    [switch]$Reseau
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,6 +40,8 @@ Write-Host "Attente du Bureau ($AttenteBureau s)..."
 Start-Sleep -Seconds $AttenteBureau
 & $Inv -VMName $VMName -Action Capture
 $preuves = (Invoke-GuestStep Preuves | Where-Object { $_ -like '{*' } | Select-Object -Last 1) | ConvertFrom-Json
+$lecteurs = @(Invoke-GuestStep Lecteurs)
+Write-Host "Lecteurs dans la session : $(($lecteurs | Where-Object { $_ -match '^[A-Z]: ' }) -join ' ; ')"
 Invoke-GuestStep LancerLibreOffice
 Start-Sleep -Seconds 25
 & $Inv -VMName $VMName -Action Capture
@@ -50,6 +54,9 @@ $verdicts = [ordered]@{
     'Profil normal, chargé'     = ($preuves.profil -eq "C:\Users\$Compte" -and $preuves.charge -and -not $preuves.evenementsTemp)
     'Pas d''animation d''accueil' = (-not $preuves.accueil)
     'Fond d''écran AB'           = ($preuves.fondEcran -like '*fond-AB.png')
+}
+if ($Reseau) {
+    $verdicts['Lecteurs réseau accessibles'] = (@($lecteurs | Where-Object { $_ -match '^[A-Z]: ' }).Count -gt 0) -and -not ($lecteurs | Where-Object { $_ -match '^[A-Z]: ECHEC' })
 }
 $verdicts.GetEnumerator() | ForEach-Object { [pscustomobject]@{ Preuve = $_.Key; Resultat = $(if ($_.Value) { 'OK' } else { 'ÉCHEC' }) } } | Format-Table -AutoSize | Out-String | Write-Host
 Write-Host "Lecteurs dans la ruche : $($preuves.lecteurs -join ', ')"

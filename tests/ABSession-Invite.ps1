@@ -14,8 +14,10 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('Preparer', 'Redemarrer', 'Preuves', 'LancerLibreOffice', 'Nettoyer')][string]$Etape,
-    [Parameter(Mandatory)][string]$Compte
+    [Parameter(Mandatory)][ValidateSet('Preparer', 'Redemarrer', 'Preuves', 'Lecteurs', 'LancerLibreOffice', 'FermerLibreOffice', 'Nettoyer')][string]$Etape,
+    [Parameter(Mandatory)][string]$Compte,
+    # LancerLibreOffice : document à ouvrir (sinon Writer vide)
+    [string]$Fichier
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,16 +60,42 @@ switch ($Etape) {
             motDePasseAuto  = [bool](Get-ItemProperty $wl).DefaultPassword
         } | ConvertTo-Json -Compress | Write-Output
     }
+    'Lecteurs' {
+        # Dans la session de l'employé : chaque lecteur persistant répond-il? (dir rétablit la connexion)
+        $prof = "C:\Users\$Compte\AppData\Local\Temp"
+        $script = Join-Path $prof 'cfrn-lecteurs.cmd'
+        $out = Join-Path $prof 'cfrn-lecteurs.txt'
+        $lines = @('@echo off', "del `"$out`" 2>nul")
+        foreach ($l in $emp.Lecteurs) { $lines += "dir $($l):\ >nul 2>&1 && (echo $($l): OK>>`"$out`") || (echo $($l): ECHEC>>`"$out`")" }
+        $lines += "net use >>`"$out`" 2>&1"
+        Set-Content -LiteralPath $script -Value $lines -Encoding ASCII
+        $name = 'CFRN-Lab-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+        $principal = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$Compte" -LogonType Interactive -RunLevel Limited
+        Register-ScheduledTask -TaskName $name -Action (New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c `"$script`"") -Principal $principal -Force | Out-Null
+        Start-ScheduledTask -TaskName $name
+        $deadline = (Get-Date).AddSeconds(60)
+        do { Start-Sleep -Seconds 2 } while ((Get-ScheduledTask -TaskName $name).State -eq 'Running' -or ((Get-ScheduledTaskInfo -TaskName $name).LastRunTime.Year -lt 2000) -and (Get-Date) -lt $deadline)
+        Unregister-ScheduledTask -TaskName $name -Confirm:$false
+        if (Test-Path $out) { Get-Content $out | Write-Output } else { Write-Output 'aucun résultat' }
+        Remove-Item $script, $out -Force -ErrorAction SilentlyContinue
+    }
     'LancerLibreOffice' {
         $exe = Get-ChildItem 'C:\Program Files\LibreOffice\program' -Filter soffice.exe | Select-Object -First 1
         $name = 'CFRN-Lab-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
         # Tâche interactive : s'exécute dans la session ouverte de l'employé (aucun mot de passe)
         $principal = New-ScheduledTaskPrincipal -UserId "$env:COMPUTERNAME\$Compte" -LogonType Interactive -RunLevel Limited
-        Register-ScheduledTask -TaskName $name -Action (New-ScheduledTaskAction -Execute $exe.FullName -Argument '--writer') -Principal $principal -Force | Out-Null
+        $arg = '--writer'
+        if ($Fichier) { $arg = "`"$Fichier`"" }
+        Register-ScheduledTask -TaskName $name -Action (New-ScheduledTaskAction -Execute $exe.FullName -Argument $arg) -Principal $principal -Force | Out-Null
         Start-ScheduledTask -TaskName $name
         Start-Sleep -Seconds 3
         Unregister-ScheduledTask -TaskName $name -Confirm:$false
-        Write-Output 'LibreOffice Writer lancé dans la session.'
+        Write-Output "LibreOffice lancé dans la session ($arg)."
+    }
+    'FermerLibreOffice' {
+        Get-Process -Name soffice* -ErrorAction SilentlyContinue | Stop-Process -Force
+        Start-Sleep -Seconds 2
+        Write-Output 'LibreOffice fermé.'
     }
     'Nettoyer' {
         Close-ABUserSession -Compte $Compte

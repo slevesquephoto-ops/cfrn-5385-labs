@@ -28,6 +28,13 @@
 
     Administrateur = 'ab-tech'
 
+    # VM de test (tests\Invoke-LabVM.ps1) : commutateur interne qui remplace le routeur AB.
+    # Un Reset rebranche les cartes des VM AB-*-T sur ce commutateur (le point de contrôle
+    # restaure l'ancienne connexion).
+    Tests = @{
+        Commutateur = 'AB-Lab-Interne'
+    }
+
     # Lecteurs : lettres mappées de façon persistante par le Setup du poste (spec : PC-01 S: T:,
     # PC-03 P: R: S:; PC-02 et PC-04 déduits de la matrice des droits, Direction$ caché exclu).
     Employes = @(
@@ -55,7 +62,9 @@
         # ab-tech explicite : par le réseau, son jeton d'administrateur local est filtré (UAC).
         @{ Nom = 'Sauvegardes$';   Dossier = 'C:\AB\Sauvegardes';    Lecteur = '';  Droits = @{ 'ab-tech' = 'Modification' } }
         # Source MSI de LibreOffice (R6-C) : LibreOffice\<installeur>, copié par Setup-SRV-01.
-        @{ Nom = 'Logiciels$';     Dossier = 'C:\AB\Logiciels';      Lecteur = '';  Droits = @{ 'AB-Tous' = 'Lecture' } }
+        # ab-tech explicite : la réparation se fait élevée avec ab-tech, dont le jeton
+        # d'administrateur est filtré par le réseau (sans cette règle : accès refusé, vu en VM).
+        @{ Nom = 'Logiciels$';     Dossier = 'C:\AB\Logiciels';      Lecteur = '';  Droits = @{ 'AB-Tous' = 'Lecture'; 'ab-tech' = 'Lecture' } }
     )
 
     # Politique de mots de passe AB (stratégie de sécurité locale).
@@ -88,6 +97,8 @@
         R1 = @{
             Compte              = 'efortin'
             MotDePassePanne     = 'Marina#Direction26'
+            # Couche 1 (PC-03) : entrée hosts vers une adresse qui ne répond pas, « ancien serveur »
+            AncienneIP          = '192.168.50.12'
             # Dossier visé par la couche 3, relatif à C:\AB\Projets (P:\2026-021 dans la spec)
             DossierProjet       = '2026-021 Agrandissement Marina Pointe-Blanche'
         }

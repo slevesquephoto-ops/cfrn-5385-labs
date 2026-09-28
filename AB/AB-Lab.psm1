@@ -736,6 +736,51 @@ function Invoke-ABAsUser {
     }
 }
 
+function Invoke-ABAsUserCommand {
+    <#
+    Exécute une ligne de commande (cmd.exe) sous l'identité d'un employé et retourne sa
+    sortie. Fichiers temporaires dans le TEMP de son profil, supprimés aussitôt.
+    #>
+    param([Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][string]$Password, [Parameter(Mandatory)][string]$Command)
+    $prof = (Get-CimInstance Win32_UserProfile -Filter "SID='$(Get-ABUserSid -Compte $Compte)'").LocalPath
+    if (-not $prof) { throw "Profil de $Compte absent." }
+    $tmp = Join-Path $prof 'AppData\Local\Temp'
+    if (-not (Test-Path -LiteralPath $tmp)) { New-Item -ItemType Directory -Path $tmp -Force | Out-Null }
+    $id = [guid]::NewGuid().ToString('N').Substring(0, 8)
+    $cmdFile = Join-Path $tmp "cfrn-$id.cmd"
+    $outFile = Join-Path $tmp "cfrn-$id.txt"
+    try {
+        Set-Content -LiteralPath $cmdFile -Value @('@echo off', "$Command > `"$outFile`" 2>&1") -Encoding ASCII
+        $code = Invoke-ABAsUser -Compte $Compte -Password $Password -Execute 'cmd.exe' -Arguments "/c `"$cmdFile`""
+        $out = @()
+        if (Test-Path -LiteralPath $outFile) { $out = @(Get-Content -LiteralPath $outFile) }
+        return [pscustomobject]@{ Code = $code; Output = $out }
+    } finally {
+        Remove-Item -LiteralPath $cmdFile, $outFile -Force -ErrorAction SilentlyContinue
+    }
+}
+
+function Get-ABUserCredentialTarget {
+    <# Cibles des identifiants Windows mémorisés d'un employé (cmdkey /list dans son contexte). #>
+    param([Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][string]$Password)
+    $r = Invoke-ABAsUserCommand -Compte $Compte -Password $Password -Command 'cmdkey /list'
+    return @($r.Output | ForEach-Object { if ($_ -match 'target=(\S+)') { $Matches[1] } })
+}
+
+function Add-ABUserCredential {
+    <# Mémorise un identifiant Windows (Gestionnaire d'identification) dans le coffre de l'employé. #>
+    param([Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][string]$Password,
+        [Parameter(Mandatory)][string]$Target, [Parameter(Mandatory)][string]$UserName, [Parameter(Mandatory)][string]$Secret)
+    $r = Invoke-ABAsUserCommand -Compte $Compte -Password $Password -Command "cmdkey /add:$Target /user:$UserName /pass:$Secret"
+    if ((Get-ABUserCredentialTarget -Compte $Compte -Password $Password) -notcontains $Target) { throw "Identifiant $Target non mémorisé pour $Compte : $($r.Output -join ' ')" }
+}
+
+function Remove-ABUserCredential {
+    param([Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][string]$Password, [Parameter(Mandatory)][string]$Target)
+    $null = Invoke-ABAsUserCommand -Compte $Compte -Password $Password -Command "cmdkey /delete:$Target"
+    if ((Get-ABUserCredentialTarget -Compte $Compte -Password $Password) -contains $Target) { throw "Identifiant $Target toujours présent pour $Compte." }
+}
+
 # ---------------------------------------------------------------------------
 # Stratégies machine (HKLM) des postes
 # ---------------------------------------------------------------------------
@@ -764,6 +809,43 @@ function Test-ABMachinePolicy {
     foreach ($p in Get-ABMachinePolicyList) {
         $s = Get-LabRegistrySnapshot -Path $p.Path -Name $p.Name
         if (-not $s.Exists -or "$($s.Value)" -ne "$($p.Value)") { "$($p.Path)\$($p.Name) différent de $($p.Value)" }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Polices (Montserrat pour le modèle de facture, R6-D)
+# ---------------------------------------------------------------------------
+$script:FontKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'
+
+function Get-ABFontList {
+    <# Polices fournies dans AB\data\polices\<famille>\*.ttf : { Fichier; Nom registre }. #>
+    param([Parameter(Mandatory)][string]$Famille)
+    $dir = Join-Path $PSScriptRoot "data\polices\$Famille"
+    foreach ($f in Get-ChildItem -LiteralPath $dir -Filter *.ttf) {
+        $style = ($f.BaseName -split '-', 2)[1]
+        $name = "$Famille $style (TrueType)"
+        if ($style -eq 'Regular') { $name = "$Famille (TrueType)" }
+        [pscustomobject]@{ Source = $f.FullName; Fichier = $f.Name; Nom = $name }
+    }
+}
+
+function Install-ABFont {
+    <# Installe une famille de polices pour TOUS les utilisateurs (C:\Windows\Fonts + registre). #>
+    param([Parameter(Mandatory)][string]$Famille)
+    foreach ($f in Get-ABFontList -Famille $Famille) {
+        $dst = Join-Path $env:windir "Fonts\$($f.Fichier)"
+        if (-not (Test-Path -LiteralPath $dst)) { Copy-Item -LiteralPath $f.Source -Destination $dst }
+        Set-LabRegistryValue -Path $script:FontKey -Name $f.Nom -Value $f.Fichier -Type String
+    }
+}
+
+function Test-ABFont {
+    <# Écarts (vide si la famille est installée pour tous les utilisateurs). #>
+    param([Parameter(Mandatory)][string]$Famille)
+    foreach ($f in Get-ABFontList -Famille $Famille) {
+        if (-not (Test-Path -LiteralPath (Join-Path $env:windir "Fonts\$($f.Fichier)"))) { "$($f.Fichier) absent de C:\Windows\Fonts" }
+        $s = Get-LabRegistrySnapshot -Path $script:FontKey -Name $f.Nom
+        if (-not $s.Exists -or $s.Value -ne $f.Fichier) { "$($f.Nom) absent du registre des polices" }
     }
 }
 
@@ -810,6 +892,79 @@ function Initialize-ABEmployeeProfile {
         Write-LabOK "$(@($Raccourcis).Count) raccourcis sur le Bureau."
     }
     return $path
+}
+
+function Find-ABProgram {
+    <# Chemin d'un exécutable installé (Program Files), ou $null. #>
+    param([Parameter(Mandatory)][string]$Exe)
+    foreach ($root in $env:ProgramFiles, ${env:ProgramFiles(x86)}) {
+        if (-not $root) { continue }
+        $hit = Get-ChildItem -LiteralPath $root -Filter $Exe -Recurse -Depth 3 -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($hit) { return $hit.FullName }
+    }
+    return $null
+}
+
+$script:ABWallpaper = 'C:\Windows\Web\Wallpaper\AB\fond-AB.png'
+
+function Initialize-ABPoste {
+    <#
+    Base commune des Setup de poste : politique de mots de passe, ab-tech, stratégies
+    (première ouverture, LibreOffice), logiciels vérifiés, fond d'écran AB, puis profil
+    de l'employé recréé par Initialize-ABEmployeeProfile. Retourne le chemin du profil.
+    Chaque Setup ajoute ensuite ce qui est propre au poste.
+    #>
+    param([Parameter(Mandatory)][string]$Machine, [Parameter(Mandatory)][string]$Compte, [object[]]$Raccourcis = @())
+    $cfg = Get-ABConfig
+    $emp = $cfg.Employes | Where-Object { $_.Compte -eq $Compte }
+
+    Write-LabStep 'Politique de mots de passe et comptes'
+    Set-ABPasswordPolicy -Machine $Machine
+    Set-ABAdminAccount
+    Write-LabOK "$((Test-ABPasswordPolicy -Machine $Machine).detail); $($cfg.Administrateur) sans expiration."
+
+    Write-LabStep 'Stratégies du poste (première ouverture, LibreOffice)'
+    Set-ABMachinePolicy
+    Write-LabOK 'Sans animation ni questions de confidentialité; LibreOffice sans conseils ni « Quoi de neuf ».'
+
+    Write-LabStep 'Logiciels'
+    foreach ($s in Get-ABSoftwareList -Poste $Machine) {
+        $found = Test-ABSoftware -Logiciel $s
+        if (-not $found) { throw "$($s.Nom) absent : lancer tools\Set-ABPoste.ps1 -Poste $Machine avant le point Propre." }
+        Write-LabOK "$($found.DisplayName) $($found.Version)"
+    }
+
+    Write-LabStep 'Fond d''écran AB'
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $script:ABWallpaper) | Out-Null
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'data\communs\fond-AB.png') -Destination $script:ABWallpaper -Force
+    Write-LabOK $script:ABWallpaper
+
+    Write-LabStep "Profil de $($emp.NomComplet) ($Compte)"
+    $data = Join-Path $PSScriptRoot "data\$Compte"
+    $path = Initialize-ABEmployeeProfile -Employe $emp -Wallpaper $script:ABWallpaper -DataRoot $data -Manifest (Join-Path $data "manifeste-$Compte.csv") -Raccourcis $Raccourcis
+    Write-LabOK "Profil prêt : $path"
+    return $path
+}
+
+function Test-ABPoste {
+    <# Contrôles communs des Verifier de poste (objets New-LabCheck). #>
+    param([Parameter(Mandatory)][string]$Machine, [Parameter(Mandatory)][string]$Compte)
+    $cfg = Get-ABConfig
+    $emp = $cfg.Employes | Where-Object { $_.Compte -eq $Compte }
+    $p = @(); foreach ($s in Get-ABSoftwareList -Poste $Machine) { if (-not (Test-ABSoftware -Logiciel $s)) { $p += "$($s.Nom) absent" } }
+    $d = "$(@(Get-ABSoftwareList -Poste $Machine).Count) logiciels présents"; if ($p) { $d = $p -join '; ' }
+    New-LabCheck -Name 'logiciels' -Passed (-not $p) -Detail $d
+    Test-ABWindowsUpdateLock -Machine $Machine
+    Test-ABPasswordPolicy -Machine $Machine
+    $p = @(Test-ABMachinePolicy)
+    $tech = Get-LocalUser -Name $cfg.Administrateur -ErrorAction SilentlyContinue
+    if (-not $tech -or $null -ne $tech.PasswordExpires) { $p += "$($cfg.Administrateur) : mot de passe qui expire" }
+    $d = 'première ouverture, LibreOffice, ab-tech conformes'; if ($p) { $d = $p -join '; ' }
+    New-LabCheck -Name 'strategies' -Passed (-not $p) -Detail $d
+    $data = Join-Path $PSScriptRoot "data\$Compte"
+    $p = @(Test-ABUserProfile -Employe $emp -Wallpaper $script:ABWallpaper -DataRoot $data -Manifest (Join-Path $data "manifeste-$Compte.csv"))
+    $d = "profil de $Compte complet (ruche, lecteurs $($emp.Lecteurs -join ', '), fond d'écran, données)"; if ($p) { $d = $p -join '; ' }
+    New-LabCheck -Name 'profil' -Passed (-not $p) -Detail $d
 }
 
 function Test-ABUserProfile {
