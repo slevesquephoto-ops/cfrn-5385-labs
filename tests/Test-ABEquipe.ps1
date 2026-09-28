@@ -86,6 +86,7 @@ foreach ($pc in 'PC-01', 'PC-02', 'PC-03', 'PC-04') {
     if ((Get-VM -Name "AB-$pc-T" -ErrorAction SilentlyContinue).State -eq 'Running') { & $Inv -VMName "AB-$pc-T" -Action Stop | Out-Null; Write-Host "AB-$pc-T arrêtée (RAM)." }
 }
 
+# Bloc 1 : SRV-01 + PC-03 (le serveur reste ensuite démarré pour PC-02, qui teste R3)
 Write-Host "########## Équipe $Variante : SRV-01 + PC-03" -ForegroundColor Cyan
 Initialize-TestVM 'SRV-01'
 Invoke-MachineCycle 'SRV-01'
@@ -98,18 +99,37 @@ Test-Access 'Accès Émilie (propre)' $true
 $null = Invoke-TimedStep 'SRV-01' 'Setup (IP déjà fixe)' 'C:\Lab\AB\SRV-01\Setup-SRV-01.ps1'
 & $Inv -VMName 'AB-PC-03-T' -Action Stop | Out-Null
 
+# Bloc 2 : SRV-01 (toujours propre) + PC-02, avec R4 et R3
+Write-Host "########## Équipe $Variante : PC-02 (R4, R3)" -ForegroundColor Cyan
+Initialize-TestVM 'PC-02' @(Join-Path $PSScriptRoot 'ABBackup-Invite.ps1')
+Invoke-MachineCycle 'PC-02'
+Invoke-MachineRemoval 'PC-02'
+# R3 : Louis-Philippe (les élèves) sauvegarde ses fichiers Critique, puis contrôle -R3
+$null = Invoke-TimedStep 'PC-02' 'Sauvegarde R3' 'C:\Lab\tests\ABBackup-Invite.ps1'
+$null = Invoke-TimedStep 'PC-02' 'Verifier -R3' 'C:\Lab\AB\PC-02\Verifier-PC-02.ps1' @('-Attendu', 'Propre', '-R3')
+& $Inv -VMName 'AB-PC-02-T' -Action Stop | Out-Null
+& $Inv -VMName 'AB-SRV-01-T' -Action Stop | Out-Null
+
+# Bloc 3 : PC-01 seul
 Write-Host "########## Équipe $Variante : PC-01" -ForegroundColor Cyan
 Initialize-TestVM 'PC-01'
 Invoke-MachineCycle 'PC-01'
 Invoke-MachineRemoval 'PC-01'
 & $Inv -VMName 'AB-PC-01-T' -Action Stop | Out-Null
+
+# Bloc 4 : PC-04 seul (R2 physique : Setup et Verifier Propre seulement)
+Write-Host "########## Équipe $Variante : PC-04 (R2 physique)" -ForegroundColor Cyan
+Initialize-TestVM 'PC-04'
+$null = Invoke-TimedStep 'PC-04' 'Setup' 'C:\Lab\AB\PC-04\Setup-PC-04.ps1'
+$null = Invoke-TimedStep 'PC-04' 'Verifier (propre)' 'C:\Lab\AB\PC-04\Verifier-PC-04.ps1' @('-Attendu', 'Propre')
+& $Inv -VMName 'AB-PC-04-T' -Action Stop | Out-Null
 $total.Stop()
 
 # --- Résultats ------------------------------------------------------------------
 $md = @("# Test de bout en bout : équipe $Variante ($Stamp)", '', '| Machine | Étape | Durée (s) | Résultat | Détail |', '| --- | --- | ---: | --- | --- |')
 foreach ($r in $rows) { $md += "| $($r.Machine) | $($r.Etape) | $($r.Secondes) | $($r.Resultat) | $($r.Detail) |" }
 $md += '', '## Remise à zéro entre deux équipes (Retrait, puis Setup, puis Panne), par machine', '', 'Setup de SRV-01 : mesure « IP déjà fixe » (cas réel entre deux équipes).', '', '| Machine | Retrait | Setup | Panne | Total | Avec les deux Verifier |', '| --- | ---: | ---: | ---: | ---: | ---: |'
-foreach ($m in 'SRV-01', 'PC-03', 'PC-01') {
+foreach ($m in 'SRV-01', 'PC-03', 'PC-02', 'PC-01') {
     $get = { param($e) ($rows | Where-Object { $_.Machine -eq $m -and $_.Etape -eq $e } | Select-Object -First 1).Secondes }
     $ret = & $get 'Retrait'; $set = & $get 'Setup'; $pan = & $get 'Panne'; $v1 = & $get 'Verifier (panne)'; $v2 = & $get 'Verifier (propre)'
     $again = & $get 'Setup (IP déjà fixe)'; if ($again) { $set = $again }
