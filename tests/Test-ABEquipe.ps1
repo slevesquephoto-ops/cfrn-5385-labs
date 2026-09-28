@@ -81,6 +81,11 @@ function Invoke-MachineRemoval([string]$Machine) {
     $null = Invoke-TimedStep $Machine 'Verifier (propre)' "$d\Verifier-$Machine.ps1" @('-Attendu', 'Propre')
 }
 
+# Deux VM à la fois au plus (RAM de l'hôte) : les postes AB encore démarrés sont arrêtés
+foreach ($pc in 'PC-01', 'PC-02', 'PC-03', 'PC-04') {
+    if ((Get-VM -Name "AB-$pc-T" -ErrorAction SilentlyContinue).State -eq 'Running') { & $Inv -VMName "AB-$pc-T" -Action Stop | Out-Null; Write-Host "AB-$pc-T arrêtée (RAM)." }
+}
+
 Write-Host "########## Équipe $Variante : SRV-01 + PC-03" -ForegroundColor Cyan
 Initialize-TestVM 'SRV-01'
 Invoke-MachineCycle 'SRV-01'
