@@ -29,24 +29,33 @@ finissait par `-T`.
 
 ## 3. Préparer les VM de test
 
-Pour chaque VM (`AB-SRV-01-T`, `AB-PC-03-T` au minimum; les autres plus tard) :
+Pour chaque VM (`AB-SRV-01-T`, `AB-PC-03-T` au minimum; `AB-PC-01-T` pour R6) :
 
-1. Windows 11 Pro installé, nom d'ordinateur **sans** le `-T` (ex. `AB-PC-03`) :
-   les scripts vérifient le nom du poste.
+1. **Windows 11 Pro 24H2**, la même build que les vrais M700 (`winver` sur un M700
+   pour comparer). Nom d'ordinateur **sans** le `-T` (ex. `AB-PC-03`) : les scripts
+   vérifient le nom du poste.
 2. Compte `ab-tech` administrateur local, même mot de passe partout.
-3. Carte réseau sur un commutateur **interne** (ex. `AB-Lab-Interne`), pour que
-   SRV-01 et PC-03 se voient comme dans la vraie salle.
+3. Carte réseau sur un commutateur **interne** (ex. `AB-Lab-Interne`), pour que les
+   VM se voient comme dans la vraie salle, **plus** une carte sur un commutateur qui
+   a Internet, le temps d'installer les logiciels (retire-la ensuite).
 4. Pas de mises à jour de fonctionnalités en cours, session fermée.
-5. Sur l'hôte :
+5. Réglages Hyper-V, puis un premier point de contrôle **`Base`** (Windows seul) :
 
 ```powershell
 Set-VM -Name AB-PC-03-T -CheckpointType Standard -AutomaticCheckpointsEnabled $false
-Stop-VM -Name AB-PC-03-T          # ou laisse-la démarrée : le point inclura la mémoire
+Checkpoint-VM -Name AB-PC-03-T -SnapshotName Base
+```
+
+6. Quand Claude Code aura écrit et testé `tools/Install-ABSoftware.ps1` (depuis `Base`),
+   lance-le dans chaque VM de poste, puis prends le point **`Propre`** :
+
+```powershell
 Checkpoint-VM -Name AB-PC-03-T -SnapshotName Propre
 ```
 
-Le point `Propre` doit être pris **avant** tout script AB, avec seulement le
-compte `ab-tech` sur la VM : les comptes des employés sont créés par les scripts.
+Pour AB-SRV-01-T, aucun logiciel : `Propre` peut être pris tout de suite après `Base`.
+Le point `Propre` doit être pris **avant** tout script AB, avec seulement le compte
+`ab-tech` : les comptes des employés sont créés par les scripts.
 
 ## 4. Enregistrer les secrets
 

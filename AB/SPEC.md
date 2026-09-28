@@ -1,8 +1,8 @@
 # Architecture Boréale — Mise en situation #2 (507 + 373)
 
-Spécification de référence pour les scripts. Copie du document de conception
-du 27 septembre 2026. En cas d'écart, le document de conception de l'enseignant
-fait foi; demander avant de changer quoi que ce soit ici.
+Spécification de référence pour les scripts. Depuis le 27 septembre 2026, ce
+fichier fait foi (le document de conception initial n'est plus mis à jour).
+Demander à l'enseignant avant de changer quoi que ce soit ici.
 
 ## Vue d'ensemble
 
@@ -40,8 +40,36 @@ Mots de passe LAB : même modèle que GDF, documentés dans un `README-Installat
 
 - **Groupe de travail, pas de domaine** : chaque employé a un compte local sur son poste *et* un compte identique (même nom, même mot de passe) sur AB-SRV-01.
 - **Windows 11 sur Intel 6e génération** : non supporté par Microsoft. Aucune mise à jour de fonctionnalités pendant la mise en situation.
+- **Windows 11 24H2** sur les vrais postes : les VM de test doivent être dans la **même build**.
 - **SMB (24H2)** : signature exigée, accès invité bloqué. Les partages fonctionnent avec des comptes authentifiés, jamais en invité. À vérifier avec `Get-SmbClientConfiguration` / `Get-SmbServerConfiguration`.
 - **En VM de test** : le commutateur interne Hyper-V remplace le routeur. Le Setup du serveur ne doit pas casser l'accès PowerShell Direct.
+
+## Logiciels
+
+Uniquement des logiciels gratuits. Ils sont installés **une seule fois**, avant le
+point de contrôle `Propre` (VM) ou avant la première équipe (vrais postes), par
+`tools/Install-ABSoftware.ps1` (winget). Les scripts Setup ne les installent pas :
+ils **vérifient** leur présence et configurent le profil (raccourcis, fichiers récents).
+
+| Logiciel | PC-01 Réception | PC-02 Associé | PC-03 Architecte | PC-04 Technicien |
+| --- | :---: | :---: | :---: | :---: |
+| LibreOffice | ✓ | ✓ | ✓ | ✓ |
+| Adobe Acrobat Reader | ✓ | ✓ | ✓ | ✓ |
+| 7-Zip | ✓ | ✓ | ✓ | ✓ |
+| LibreCAD | | | ✓ | ✓ |
+| FreeCAD | | | | ✓ |
+| Blender | | | | ✓ |
+
+- AB-SRV-01 : aucun logiciel ajouté.
+- Identifiants winget : à confirmer avec `winget search` dans la VM avant de les figer.
+- La liste est dans la config AB (source unique) et contrôlée par chaque `Verifier-*`.
+- Les données fictives incluent des `.odt`, `.ods`, `.pdf` et `.dxf` (plans, ouverts
+  dans LibreCAD). DWG TrueView est retiré (installeur hors ligne non disponible).
+- LibreOffice est installé depuis une source locale, puis la liste des sources du
+  produit MSI pointe vers `\\AB-SRV-01\Logiciels$\LibreOffice` : la réparation
+  (R6 variante C) va chercher l'installeur sur le serveur.
+- Ne jamais changer une association de fichiers `.pdf` par script : Windows 11
+  protège ce choix (UserChoice et pilote UCPD).
 
 ## Comptes, groupes et partages (AB-SRV-01)
 
@@ -66,11 +94,64 @@ Les droits sont portés par **NTFS**. Chaque partage donne *Utilisateurs authent
 | Archives | C:\AB\Archives | R: | Modification | Lecture | Lecture | aucun |
 | Commun | C:\AB\Commun | S: | (via AB-Tous) | (via AB-Tous) | (via AB-Tous) | Modification |
 | Sauvegardes$ (caché) | C:\AB\Sauvegardes | aucun | aucun | aucun | aucun | aucun |
+| Logiciels$ (caché) | C:\AB\Logiciels | aucun | Lecture | Lecture | Lecture | Lecture |
 
 - **Héritage** coupé à la racine de chaque partage. Administrateurs et SYSTEM : Contrôle total partout.
 - **Sauvegardes$** : accessible seulement avec `ab-tech`; destination de R3.
 - **Lecteurs réseau** : mappés de façon persistante par le Setup de chaque poste, selon les groupes de la personne.
 - **Données fictives** : sous-dossiers par projet avec plans PDF, devis, correspondance; dates réalistes via manifeste CSV (`;` comme séparateur, même format que GDF : `SourceRelative;TargetRelative;CreationTime;LastWriteTime;Criticality`).
+
+## Profils des employés (entièrement automatisés)
+
+L'enseignant n'ouvre aucune session à la main. Le Setup de chaque poste crée le
+compte, le profil, les données et l'apparence.
+
+**Création du profil sans ouverture de session**
+- Compte local créé par le Setup (utilisateur standard), puis profil créé par l'API
+  Windows `CreateProfile` (copie du profil par défaut, NTUSER.DAT inclus).
+- Première ouverture de session sans animation (stratégie `EnableFirstLogonAnimation = 0`)
+  et sans questions de confidentialité.
+- Réglages HKCU écrits directement dans la ruche (fond d'écran, Explorateur, lecteurs
+  réseau persistants sous `HKCU\Network\<lettre>`).
+- Ce qui ne s'écrit pas hors session (identifiants du Gestionnaire d'identification,
+  chiffrés par l'utilisateur) : tâche planifiée ponctuelle exécutée **sous l'identité
+  de l'utilisateur** (avec son mot de passe), supprimée après usage.
+- Le Verifier de chaque poste contrôle que le profil est complet (dossiers connus,
+  ruche, lecteurs, fond d'écran).
+
+**Politique de mots de passe d'Architecture Boréale**
+
+| Règle | Valeur | Raison |
+| --- | --- | --- |
+| Longueur minimale | 12 caractères | Recommandation actuelle |
+| Complexité | Activée | Les mots de passe LAB la respectent déjà |
+| Expiration | Aucune (comptes des employés) | Pas d'expiration périodique; évite les invites imprévues pendant la mise en situation |
+| Historique | 5 mots de passe | |
+| Verrouillage de compte | Désactivé sur SRV-01; défaut Windows sur les postes | Décision R1 (pas de 4e couche imprévue) |
+
+- Appliquée par les Setup (stratégie de sécurité locale), et vérifiée par les Verifier.
+- Un document fictif « Politique de mots de passe AB » est déposé dans `Commun` :
+  les élèves doivent la respecter s'ils réinitialisent un mot de passe (R1, couche 2).
+
+**Données fictives par employé**
+
+| Employé | Emplacements | Contenu typique |
+| --- | --- | --- |
+| lpgauthier | Bureau, Documents, Téléchargements, `C:\Soumissions-LP`, favoris Edge | Budget, contrats, soumissions, présentations clients |
+| efortin | Bureau, Documents | Devis, correspondance de chantier, plans PDF |
+| jbouchard | Bureau, Documents, Images | Plans `.dxf`, rendus (images), bibliothèque de symboles |
+| ncote | Bureau, Documents | Factures, agenda, liste des fournisseurs |
+
+- Générées une fois par `tools/New-ABData.ps1`, puis committées dans `AB/data`
+  (résultat identique d'une équipe à l'autre).
+- Les `.odt`, `.ods` et `.pdf` sont produits avec LibreOffice en mode sans interface,
+  à partir de modèles texte, HTML ou CSV.
+- 20 à 40 fichiers par employé, dates réalistes réparties sur 2025-2026, colonne
+  `Criticality` (Critique, Importante, Standard) dans le manifeste.
+- Contenu en français, cohérent avec les 3 projets et les personnages; aucune donnée
+  réelle.
+- Apparence : fond d'écran AB, raccourcis du Bureau selon le rôle (lecteurs réseau,
+  logiciels du poste).
 
 ## Requêtes et pannes
 
@@ -81,6 +162,7 @@ Les droits sont portés par **NTFS**. Chaque partage donne *Utilisateurs authent
 | R3 Sauvegarde avant congrès | AB-PC-02 | Courriel, requête ITFlow | 15 min | 30 min |
 | R4 Lenteur, ajout de RAM | AB-PC-02 | Requête ITFlow + cycle 373 | 20 min | 50 min |
 | R5 (optionnelle) Lecteur S: disparu | AB-PC-01 | Courriel | 5 min | 15 min |
+| R6 Facturation impossible (logiciel) | AB-PC-01 (+ serveur pour la variante B) | Courriel, requête ITFlow | 10 min | 25 min |
 
 R3 doit précéder R4 (sauvegarder avant d'ouvrir le boîtier).
 
@@ -128,12 +210,35 @@ Panne **physique**, préparée à la main (aucun script de panne).
 
 S: est mappé de façon persistante vers `\\AB-SERVEUR\Commun`, l'ancien nom du serveur.
 
+### R6 : « Je ne peux plus faire mes factures » (Nathalie)
+
+Panne logicielle liée au travail de facturation de Nathalie dans LibreOffice.
+Estimation : 10 min (rapide) à 25 min (normal). Avec R6, une équipe normale
+dépasse légèrement la demi-journée : R5 reste optionnelle.
+
+| Variante | Cause | Symptôme | Correction attendue |
+| --- | --- | --- | --- |
+| A | Profil utilisateur LibreOffice corrompu | LibreOffice plante ou se ferme au démarrage | Démarrage en mode sans échec, réinitialisation du profil |
+| B | Fichier de verrou orphelin sur le registre des factures `Registre-factures-2026.ods` dans `\\AB-SRV-01\Administration` | « Document verrouillé par un autre utilisateur », ouverture en lecture seule | Identifier et supprimer le fichier `.~lock.*#` |
+| C | Installation de LibreOffice endommagée (fichier du programme retiré) | Erreur au lancement | Réparer l'installation (Paramètres > Applications); Windows va chercher la source dans `\\AB-SRV-01\Logiciels$` |
+| D | Police du modèle de facture désinstallée | Facture mal affichée, mise en page brisée | Réinstaller la police pour tous les utilisateurs |
+| E | Fonction Windows « Microsoft Print to PDF » désactivée | Impossible de produire la facture en PDF | Réactiver la fonction facultative |
+
+- Le modèle `Facture-AB.ott` et le registre `Registre-factures-2026.ods` sont dans le partage Administration (T:). Le verrou de la variante B vise le registre : un modèle `.ott` s'ouvre toujours en nouveau document, donc un verrou sur lui n'aurait aucun effet.
+- La police du modèle est une police libre (licence OFL), fournie dans `AB/data`.
+- Chaque variante est réversible par le Retrait (fichier sauvegardé, profil
+  sauvegardé, fonction réactivée) et détectable par le Verifier.
+- Faisabilité à confirmer en VM par Claude Code avant de figer une variante.
+- Variante C : si le réseau ou l'accès au serveur est en panne, la réparation échoue
+  aussi. C'est voulu (dépendance réseau à diagnostiquer), mais R6-C ne doit pas
+  être combinée à une panne réseau sur PC-01 pour la même équipe.
+
 ## Scripts par machine
 
 | Machine | Setup | Panne | Vérifier (état propre) |
 | --- | --- | --- | --- |
-| SRV-01 | IP fixe, comptes, groupes, dossiers, NTFS, partages, données | R1 couche 2 (mot de passe efortin) + couche 3 selon `-Variante` | ACL, groupes, partages et mot de passe conformes |
-| PC-01 | Profil ncote, lecteurs S: et T: | R5 : S: vers \\AB-SERVEUR | S: pointe vers \\AB-SRV-01\Commun |
+| SRV-01 | IP fixe, comptes, groupes, dossiers, NTFS, partages, données | R1 couche 2 (mot de passe efortin) + couche 3 selon `-Variante`; R6 variante B (verrou) | ACL, groupes, partages et mot de passe conformes |
+| PC-01 | Profil ncote, lecteurs S: et T: | R5 : S: vers \\AB-SERVEUR; R6 selon `-Variante` (B se fait sur SRV-01) | S: pointe vers \\AB-SRV-01\Commun; LibreOffice, police et impression PDF fonctionnels |
 | PC-02 | Profil lpgauthier, données dont C:\Soumissions-LP et favoris Edge | R4 : démarrage encombré, processus gourmand | Démarrage propre, pas de processus fictif; `-R3` : hash des fichiers à destination |
 | PC-03 | Profil efortin, lecteurs P:, R:, S: | R1 couches 1 et 2 (hosts, ancien identifiant mémorisé) | Résolution correcte, identifiant correct |
 | PC-04 | Profil jbouchard | aucune (panne physique) | Poste démarré, disque en tête de l'ordre de démarrage |
@@ -147,5 +252,5 @@ Un client par équipe : « Architecture Boréale — Équipe A » à « E », cr
 - Lieux : Bureaux (principal), Salle technique.
 - Contacts : les 4 employés.
 - Actifs : les 5 machines (numéros de série réels lus sur le matériel).
-- Requêtes pré-créées : R1, R3, R4, R5. **R2 n'est pas créée** (les élèves la créent à partir de l'appel).
+- Requêtes pré-créées : R1, R3, R4, R5, R6. **R2 n'est pas créée** (les élèves la créent à partir de l'appel).
 - Réseau, fournisseur « Fournisseur CFRN » et identifiant ab-tech : saisis à la main (non disponibles ou non souhaités par l'API).
