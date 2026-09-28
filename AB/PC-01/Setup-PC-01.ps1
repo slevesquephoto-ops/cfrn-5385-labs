@@ -9,7 +9,9 @@
     stratégies, logiciels vérifiés, fond d'écran AB, profil de ncote RECRÉÉ à neuf
     (lecteurs S: et T:, données, raccourcis).
     Propre au poste (R6) : police Montserrat du modèle de facture installée pour tous les
-    utilisateurs, fonction « Microsoft Print to PDF » activée.
+    utilisateurs, fonction « Microsoft Print to PDF » activée, sécurité des macros de
+    LibreOffice « Élevé » avec T:\ et \\AB-SRV-01\Administration en emplacements de
+    confiance (la macro de numérotation du modèle s'exécute).
     Refuse de s'exécuter si une panne est installée (lancer Retrait-PC-01.ps1 d'abord).
 #>
 [CmdletBinding()]
@@ -39,6 +41,10 @@ try {
     $shortcuts = @(@{ Nom = 'Facturation (T)'; Cible = 'T:\Facturation' }, @{ Nom = 'Commun (S)'; Cible = 'S:\' })
     $lo = Find-ABProgram 'soffice.exe'; if ($lo) { $shortcuts += @{ Nom = 'LibreOffice'; Cible = $lo } }
     $null = Initialize-ABPoste -Machine $Machine -Compte 'ncote' -Raccourcis $shortcuts
+
+    Write-LabStep 'LibreOffice : sécurité des macros (modèle de facture)'
+    Set-ABLibreOfficeMacroConfig -Compte 'ncote' -Niveau 2 -Emplacements (Get-ABConfig).Pannes.R6.EmplacementsConfiance
+    Write-LabOK 'Sécurité Élevé; T:\ et \\AB-SRV-01\Administration en emplacements de confiance.'
 } catch {
     Write-LabWarn $_.Exception.Message
     $exitCode = 1

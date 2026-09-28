@@ -813,6 +813,67 @@ function Test-ABMachinePolicy {
 }
 
 # ---------------------------------------------------------------------------
+# Profil LibreOffice d'un employé (R6-A : verrou; R6-E : sécurité des macros)
+# ---------------------------------------------------------------------------
+function Get-ABLibreOfficeRoot {
+    <# Installation utilisateur de LibreOffice (…\LibreOffice\4) : le verrou « .lock » y est, le profil dans « user ». #>
+    param([Parameter(Mandatory)][string]$Compte)
+    $prof = (Get-CimInstance Win32_UserProfile -Filter "SID='$(Get-ABUserSid -Compte $Compte)'").LocalPath
+    if (-not $prof) { throw "Profil de $Compte absent." }
+    return (Join-Path $prof 'AppData\Roaming\LibreOffice\4')
+}
+
+$script:XcuNs = 'http://openoffice.org/2001/registry'
+$script:ScriptingPath = '/org.openoffice.Office.Common/Security/Scripting'
+
+function Get-ABLibreOfficeMacroConfig {
+    <# Sécurité des macros du profil : { Niveau (0..3, 2 si absent = défaut); Emplacements; Existe }. #>
+    param([Parameter(Mandatory)][string]$Compte)
+    $xcu = Join-Path (Get-ABLibreOfficeRoot -Compte $Compte) 'user\registrymodifications.xcu'
+    $r = [pscustomobject]@{ Niveau = 2; Emplacements = @(); Existe = (Test-Path -LiteralPath $xcu) }
+    if (-not $r.Existe) { return $r }
+    [xml]$x = Get-Content -LiteralPath $xcu -Raw -Encoding UTF8
+    $ns = New-Object Xml.XmlNamespaceManager($x.NameTable); $ns.AddNamespace('oor', $script:XcuNs)
+    $lvl = $x.SelectSingleNode("//item[@oor:path='$($script:ScriptingPath)']/prop[@oor:name='MacroSecurityLevel']/value", $ns)
+    if ($lvl) { $r.Niveau = [int]$lvl.InnerText }
+    $urls = $x.SelectNodes("//item[@oor:path='$($script:ScriptingPath)']/prop[@oor:name='SecureURL']/value/it", $ns)
+    $r.Emplacements = @($urls | ForEach-Object { $_.InnerText })
+    return $r
+}
+
+function Set-ABLibreOfficeMacroConfig {
+    <#
+    Écrit le niveau de sécurité des macros et les emplacements de confiance dans le profil
+    LibreOffice de l'employé (registrymodifications.xcu), sans toucher au reste du fichier.
+    #>
+    param([Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][int]$Niveau, [AllowEmptyCollection()][string[]]$Emplacements = @())
+    $userDir = Join-Path (Get-ABLibreOfficeRoot -Compte $Compte) 'user'
+    if (-not (Test-Path -LiteralPath $userDir)) { New-Item -ItemType Directory -Path $userDir -Force | Out-Null }
+    $xcu = Join-Path $userDir 'registrymodifications.xcu'
+    if (Test-Path -LiteralPath $xcu) { [xml]$x = Get-Content -LiteralPath $xcu -Raw -Encoding UTF8 }
+    else { [xml]$x = '<?xml version="1.0" encoding="UTF-8"?><oor:items xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"></oor:items>' }
+    $ns = New-Object Xml.XmlNamespaceManager($x.NameTable); $ns.AddNamespace('oor', $script:XcuNs)
+    foreach ($n in @($x.SelectNodes("//item[@oor:path='$($script:ScriptingPath)'][prop[@oor:name='MacroSecurityLevel' or @oor:name='SecureURL']]", $ns))) { [void]$n.ParentNode.RemoveChild($n) }
+    $list = ($Emplacements | ForEach-Object { "<it>$([Security.SecurityElement]::Escape($_))</it>" }) -join ''
+    $frag = $x.CreateDocumentFragment()
+    $frag.InnerXml = "<item xmlns:oor=`"$($script:XcuNs)`" oor:path=`"$($script:ScriptingPath)`"><prop oor:name=`"MacroSecurityLevel`" oor:op=`"fuse`"><value>$Niveau</value></prop></item>" +
+    "<item xmlns:oor=`"$($script:XcuNs)`" oor:path=`"$($script:ScriptingPath)`"><prop oor:name=`"SecureURL`" oor:op=`"fuse`"><value>$list</value></prop></item>"
+    [void]$x.DocumentElement.AppendChild($frag)
+    $settings = New-Object Xml.XmlWriterSettings; $settings.Encoding = New-Object Text.UTF8Encoding($false)
+    $w = [Xml.XmlWriter]::Create($xcu, $settings); try { $x.Save($w) } finally { $w.Close() }
+    & icacls.exe (Split-Path -Parent $userDir) /setowner "$env:COMPUTERNAME\$Compte" /T /C /Q | Out-Null
+}
+
+function Get-ABLibreOfficeLock {
+    <# Verrou du profil LibreOffice : $null, ou { Poste; Compte; Chemin }. #>
+    param([Parameter(Mandatory)][string]$Compte)
+    $lock = Join-Path (Get-ABLibreOfficeRoot -Compte $Compte) '.lock'
+    if (-not (Test-Path -LiteralPath $lock)) { return $null }
+    $h = @{}; foreach ($l in Get-Content -LiteralPath $lock) { if ($l -match '^(\w+)=(.*)$') { $h[$Matches[1]] = $Matches[2] } }
+    return [pscustomobject]@{ Poste = $h['Host']; Compte = $h['User']; Chemin = $lock }
+}
+
+# ---------------------------------------------------------------------------
 # Polices (Montserrat pour le modèle de facture, R6-D)
 # ---------------------------------------------------------------------------
 $script:FontKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts'

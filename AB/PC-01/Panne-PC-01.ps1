@@ -8,14 +8,14 @@
     R5 (optionnelle, installée sauf -SansR5) : S: mappé de façon persistante vers
         \\AB-SERVEUR\Commun, l'ancien nom du serveur (ruche de ncote).
     R6 selon -Variante (même lettre que les autres requêtes de l'équipe) :
-      A  EN ATTENTE DE DÉCISION : la corruption du profil LibreOffice n'a pas de symptôme
-         (vérifié en VM). Rien d'installé pour R6.
+      A  Profil LibreOffice de Nathalie verrouillé par son ancien poste (AB-RECEPTION) :
+         LibreOffice demande au démarrage s'il doit continuer (vérifié en VM).
       B  sur le serveur (Panne-SRV-01 : verrou du registre des factures). Rien ici.
       C  Installation de LibreOffice endommagée : soffice.bin retiré (réparation depuis
          \\AB-SRV-01\Logiciels$, vérifiée en VM).
       D  Police Montserrat du modèle de facture désinstallée (fichiers et registre).
-      E  EN ATTENTE DE DÉCISION : « Microsoft Print to PDF » ne se réactive pas de façon
-         fiable (0x800f0922, vérifié en VM). Rien d'installé pour R6.
+      E  Sécurité des macros « Très élevé » sans emplacement de confiance : la macro de
+         numérotation du modèle de facture est bloquée (barre « Macros désactivées »).
     Tout ce qui est modifié est enregistré avant (état 'PC-01') pour un retrait exact.
 #>
 [CmdletBinding()]
@@ -51,9 +51,19 @@ try {
             Get-LabRegistrySnapshot -Path (Join-Path $Root 'Network\S') -Name 'RemotePath'
         } | Select-Object Exists, Value
     }
+    $loRoot = Get-ABLibreOfficeRoot -Compte $Compte
+    $lockFile = Join-Path $loRoot '.lock'
+    $xcu = Join-Path $loRoot 'user\registrymodifications.xcu'
+    function Get-FileState([string]$p) {
+        $s = [ordered]@{ Chemin = $p; Existe = (Test-Path -LiteralPath $p); Contenu = $null }
+        if ($s.Existe) { $s.Contenu = [Convert]::ToBase64String([IO.File]::ReadAllBytes($p)) }
+        return $s
+    }
     switch ($Variante) {
+        'A' { $state.R6 = [ordered]@{ Type = 'Fichier'; Fichier = (Get-FileState $lockFile) } }
         'C' { $state.R6 = [ordered]@{ Type = 'LibreOffice'; Present = (Test-Path -LiteralPath $soffice) } }
         'D' { $state.R6 = [ordered]@{ Type = 'Police'; Ecarts = @(Test-ABFont -Famille 'Montserrat') } }
+        'E' { $state.R6 = [ordered]@{ Type = 'Fichier'; Fichier = (Get-FileState $xcu) } }
     }
     if (-not (Save-LabState -Scenario $Machine -Data $state)) { throw 'État déjà présent : installation interrompue.' }
     Write-LabOK 'État enregistré.'
@@ -69,8 +79,20 @@ try {
 
     Write-LabStep "R6 : variante $Variante"
     switch ($Variante) {
-        { $_ -in 'A', 'E' } { Write-LabWarn "R6-$Variante en attente de décision (voir le rapport) : rien d'installé pour R6." }
+        'A' {
+            # Format du verrou d'une installation utilisateur de LibreOffice (…\LibreOffice\4\.lock)
+            $r6 = (Get-ABConfig).Pannes.R6
+            $when = (Get-Date).AddDays(-3).ToString('ddd MMM dd HH:mm:ss yyyy', [Globalization.CultureInfo]::InvariantCulture)
+            if (-not (Test-Path -LiteralPath $loRoot)) { New-Item -ItemType Directory -Path $loRoot -Force | Out-Null }
+            Set-Content -LiteralPath $lockFile -Encoding ASCII -Value @('[Lockdata]', "User=$Compte", "Host=$($r6.VerrouProfilPoste)", "Stamp=$([guid]::NewGuid().ToString('N'))", "Time=$when", 'IPCServer=true')
+            & icacls.exe $lockFile /setowner "$env:COMPUTERNAME\$Compte" /C /Q | Out-Null
+            Write-LabOK "Profil LibreOffice de $Compte verrouillé par $($r6.VerrouProfilPoste)."
+        }
         'B' { Write-LabOK 'R6-B : verrou posé sur le serveur par Panne-SRV-01.' }
+        'E' {
+            Set-ABLibreOfficeMacroConfig -Compte $Compte -Niveau 3 -Emplacements @()
+            Write-LabOK 'Sécurité des macros « Très élevé », aucun emplacement de confiance.'
+        }
         'C' {
             if (-not (Test-Path -LiteralPath $soffice)) { throw 'soffice.bin déjà absent : Setup ou réparation à faire d''abord.' }
             Move-Item -LiteralPath $soffice -Destination $backup -Force

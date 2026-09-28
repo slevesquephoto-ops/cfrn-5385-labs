@@ -106,6 +106,12 @@
             # Relatifs à C:\AB\Administration (T:)
             Registre = 'Facturation\Registre-factures-2026.ods'
             Modele   = 'Modèles\Facture-AB.ott'
+            # Variante A : profil LibreOffice de Nathalie verrouillé par son ancien poste
+            # (profil recopié pendant que LibreOffice y était ouvert)
+            VerrouProfilPoste = 'AB-RECEPTION'
+            # Variante E : emplacements de confiance des macros (état propre : sécurité Élevé
+            # et ces emplacements; panne : Très élevé et aucun emplacement)
+            EmplacementsConfiance = @('file:///T:/', 'file://AB-SRV-01/Administration/')
             # Variante B : verrou orphelin laissé par le poste de Louis-Philippe
             VerrouNom   = 'Louis-Philippe Gauthier'
             VerrouCompte = 'lpgauthier'

@@ -47,6 +47,13 @@ try {
                 else { Remove-Item -LiteralPath $backup -Force -ErrorAction SilentlyContinue; Write-LabOK 'LibreOffice déjà réparé par les élèves.' }
             }
             'Police' { Install-ABFont -Famille 'Montserrat'; Write-LabOK 'Montserrat réinstallée pour tous les utilisateurs.' }
+            'Fichier' {
+                # A : verrou du profil; E : registrymodifications.xcu (octet pour octet)
+                $f = $state.R6.Fichier
+                if ($f.Existe) { [IO.File]::WriteAllBytes($f.Chemin, [Convert]::FromBase64String($f.Contenu)); & icacls.exe $f.Chemin /setowner "$env:COMPUTERNAME\$Compte" /C /Q | Out-Null }
+                elseif (Test-Path -LiteralPath $f.Chemin) { Remove-Item -LiteralPath $f.Chemin -Force }
+                Write-LabOK "$(Split-Path -Leaf $f.Chemin) remis dans son état d'origine."
+            }
         }
     }
 

@@ -94,6 +94,8 @@ Invoke-MachineCycle 'PC-03' -Acces
 Invoke-MachineRemoval 'PC-03'
 Invoke-MachineRemoval 'SRV-01'
 Test-Access 'Accès Émilie (propre)' $true
+# Cas réel entre deux équipes : l'IP fixe du serveur est déjà en place
+$null = Invoke-TimedStep 'SRV-01' 'Setup (IP déjà fixe)' 'C:\Lab\AB\SRV-01\Setup-SRV-01.ps1'
 & $Inv -VMName 'AB-PC-03-T' -Action Stop | Out-Null
 
 Write-Host "########## Équipe $Variante : PC-01" -ForegroundColor Cyan
@@ -106,10 +108,11 @@ $total.Stop()
 # --- Résultats ------------------------------------------------------------------
 $md = @("# Test de bout en bout : équipe $Variante ($Stamp)", '', '| Machine | Étape | Durée (s) | Résultat | Détail |', '| --- | --- | ---: | --- | --- |')
 foreach ($r in $rows) { $md += "| $($r.Machine) | $($r.Etape) | $($r.Secondes) | $($r.Resultat) | $($r.Detail) |" }
-$md += '', '## Remise à zéro entre deux équipes (Retrait, puis Setup, puis Panne), par machine', '', '| Machine | Retrait | Setup | Panne | Total | Avec les deux Verifier |', '| --- | ---: | ---: | ---: | ---: | ---: |'
+$md += '', '## Remise à zéro entre deux équipes (Retrait, puis Setup, puis Panne), par machine', '', 'Setup de SRV-01 : mesure « IP déjà fixe » (cas réel entre deux équipes).', '', '| Machine | Retrait | Setup | Panne | Total | Avec les deux Verifier |', '| --- | ---: | ---: | ---: | ---: | ---: |'
 foreach ($m in 'SRV-01', 'PC-03', 'PC-01') {
     $get = { param($e) ($rows | Where-Object { $_.Machine -eq $m -and $_.Etape -eq $e } | Select-Object -First 1).Secondes }
     $ret = & $get 'Retrait'; $set = & $get 'Setup'; $pan = & $get 'Panne'; $v1 = & $get 'Verifier (panne)'; $v2 = & $get 'Verifier (propre)'
+    $again = & $get 'Setup (IP déjà fixe)'; if ($again) { $set = $again }
     $md += "| $m | $ret | $set | $pan | $($ret + $set + $pan) | $($ret + $set + $pan + $v1 + $v2) |"
 }
 $md += '', "Durée totale de la répétition (VM comprises) : $([int]$total.Elapsed.TotalMinutes) min $($total.Elapsed.Seconds) s."
