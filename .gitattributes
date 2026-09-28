@@ -9,3 +9,10 @@
 *.pdf  binary
 *.docx binary
 *.xlsx binary
+*.ttf  binary
+*.otf  binary
+*.odt  binary
+*.ods  binary
+*.ott  binary
+*.odp  binary
+*.ico  binary
