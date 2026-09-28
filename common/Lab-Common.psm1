@@ -177,10 +177,15 @@ function Get-LabRegistrySnapshot {
     $snap = [ordered]@{ Path = $Path; Name = $Name; Exists = $false; Value = $null; Type = $null }
     if (Test-Path -LiteralPath $Path) {
         $key = Get-Item -LiteralPath $Path
-        if ($key.GetValueNames() -contains $Name) {
-            $snap.Exists = $true
-            $snap.Value = $key.GetValue($Name, $null, 'DoNotExpandEnvironmentNames')
-            $snap.Type = $key.GetValueKind($Name).ToString()
+        try {
+            if ($key.GetValueNames() -contains $Name) {
+                $snap.Exists = $true
+                $snap.Value = $key.GetValue($Name, $null, 'DoNotExpandEnvironmentNames')
+                $snap.Type = $key.GetValueKind($Name).ToString()
+            }
+        } finally {
+            # Clé fermée tout de suite : sinon une ruche montée (NTUSER.DAT) ne se démonte plus
+            $key.Close()
         }
     }
     return [pscustomobject]$snap
@@ -223,13 +228,19 @@ function Mount-LabUserHive {
 function Dismount-LabUserHive {
     param([Parameter(Mandatory)]$Hive)
     if (-not $Hive.Loaded) { return }
-    [gc]::Collect()
-    [gc]::WaitForPendingFinalizers()
-    for ($i = 0; $i -lt 5; $i++) {
-        & reg.exe unload "HKU\$($Hive.MountName)" 2>$null | Out-Null
-        if ($LASTEXITCODE -eq 0) { return }
-        Start-Sleep -Milliseconds 500
-    }
+    # En 5.1, avec ErrorActionPreference = Stop, un « Accès refusé » de reg.exe sur la
+    # sortie d'erreur arrêterait l'appelant : ici, un échec est attendu et réessayé.
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        for ($i = 0; $i -lt 10; $i++) {
+            [gc]::Collect()
+            [gc]::WaitForPendingFinalizers()
+            & reg.exe unload "HKU\$($Hive.MountName)" 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) { return }
+            Start-Sleep -Milliseconds 500
+        }
+    } finally { $ErrorActionPreference = $previous }
     Write-LabWarn "La ruche $($Hive.MountName) n'a pas pu être déchargée. Redémarrer avant la connexion de l'utilisateur."
 }
 
