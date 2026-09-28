@@ -13,6 +13,7 @@
     }
 
     Reseau = @{
+        Serveur    = 'AB-SRV-01'
         Prefixe    = 24
         Passerelle = '192.168.50.1'
         Dns        = @('192.168.50.1')
@@ -27,11 +28,13 @@
 
     Administrateur = 'ab-tech'
 
+    # Lecteurs : lettres mappées de façon persistante par le Setup du poste (spec : PC-01 S: T:,
+    # PC-03 P: R: S:; PC-02 et PC-04 déduits de la matrice des droits, Direction$ caché exclu).
     Employes = @(
-        @{ Compte = 'lpgauthier'; NomComplet = 'Louis-Philippe Gauthier'; Role = 'Architecte associé, propriétaire';    Poste = 'PC-02'; MotDePasse = 'Loui!sAB-2026' }
-        @{ Compte = 'efortin';    NomComplet = 'Émilie Fortin';           Role = 'Architecte de projets';               Poste = 'PC-03'; MotDePasse = 'Emil!ieAB-2026' }
-        @{ Compte = 'jbouchard';  NomComplet = 'Jérémie Bouchard';        Role = 'Technicien en architecture (dessin)'; Poste = 'PC-04'; MotDePasse = 'Jere!mieAB-2026' }
-        @{ Compte = 'ncote';      NomComplet = 'Nathalie Côté';           Role = 'Adjointe administrative, réception';  Poste = 'PC-01'; MotDePasse = 'Nath!alieAB-2026' }
+        @{ Compte = 'lpgauthier'; NomComplet = 'Louis-Philippe Gauthier'; Role = 'Architecte associé, propriétaire';    Poste = 'PC-02'; MotDePasse = 'Loui!sAB-2026';    Lecteurs = @('P', 'R', 'S', 'T') }
+        @{ Compte = 'efortin';    NomComplet = 'Émilie Fortin';           Role = 'Architecte de projets';               Poste = 'PC-03'; MotDePasse = 'Emil!ieAB-2026';   Lecteurs = @('P', 'R', 'S') }
+        @{ Compte = 'jbouchard';  NomComplet = 'Jérémie Bouchard';        Role = 'Technicien en architecture (dessin)'; Poste = 'PC-04'; MotDePasse = 'Jere!mieAB-2026';  Lecteurs = @('P', 'R', 'S') }
+        @{ Compte = 'ncote';      NomComplet = 'Nathalie Côté';           Role = 'Adjointe administrative, réception';  Poste = 'PC-01'; MotDePasse = 'Nath!alieAB-2026'; Lecteurs = @('S', 'T') }
     )
 
     Groupes = @{

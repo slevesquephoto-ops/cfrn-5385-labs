@@ -463,4 +463,402 @@ function Set-ABShareAccess {
     }
 }
 
+# ===========================================================================
+# MOTEUR DE PROFIL DES EMPLOYÉS (commun aux 4 postes)
+# Vérifié en VM (AB-PC-03-T, 24H2) : CreateProfile hors session, écriture dans la
+# ruche, vraie ouverture de session ensuite (Bureau, profil non temporaire, pas
+# d'animation), tâche sous l'identité de l'employé avec droit temporaire.
+# ===========================================================================
+if (-not ('ABNative.Profile' -as [type])) {
+    Add-Type -Namespace ABNative -Name Profile -MemberDefinition @'
+[DllImport("userenv.dll", CharSet = CharSet.Unicode)]
+public static extern int CreateProfile(string sid, string userName, System.Text.StringBuilder path, uint size);
+'@
+}
+if (-not ('ABNative.Lsa' -as [type])) {
+    Add-Type -Namespace ABNative -Name Lsa -MemberDefinition @'
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+public struct LSA_UNICODE_STRING { public ushort Length; public ushort MaximumLength; public IntPtr Buffer; }
+[StructLayout(LayoutKind.Sequential)]
+public struct LSA_OBJECT_ATTRIBUTES { public int Length; public IntPtr RootDirectory; public IntPtr ObjectName; public uint Attributes; public IntPtr SecurityDescriptor; public IntPtr SecurityQualityOfService; }
+[DllImport("advapi32.dll")] static extern uint LsaOpenPolicy(IntPtr system, ref LSA_OBJECT_ATTRIBUTES attr, uint access, out IntPtr handle);
+[DllImport("advapi32.dll")] static extern uint LsaAddAccountRights(IntPtr handle, byte[] sid, LSA_UNICODE_STRING[] rights, uint count);
+[DllImport("advapi32.dll")] static extern uint LsaRemoveAccountRights(IntPtr handle, byte[] sid, bool all, LSA_UNICODE_STRING[] rights, uint count);
+[DllImport("advapi32.dll")] static extern uint LsaClose(IntPtr handle);
+[DllImport("advapi32.dll")] static extern int LsaNtStatusToWinError(uint status);
+public static int Change(byte[] sid, string right, bool add) {
+    LSA_OBJECT_ATTRIBUTES a = new LSA_OBJECT_ATTRIBUTES(); IntPtr h;
+    uint r = LsaOpenPolicy(IntPtr.Zero, ref a, 0x00000800 | 0x00000010, out h);
+    if (r != 0) return LsaNtStatusToWinError(r);
+    LSA_UNICODE_STRING[] s = new LSA_UNICODE_STRING[1];
+    s[0].Buffer = Marshal.StringToHGlobalUni(right);
+    s[0].Length = (ushort)(right.Length * 2); s[0].MaximumLength = (ushort)((right.Length + 1) * 2);
+    r = add ? LsaAddAccountRights(h, sid, s, 1) : LsaRemoveAccountRights(h, sid, false, s, 1);
+    Marshal.FreeHGlobal(s[0].Buffer); LsaClose(h);
+    return LsaNtStatusToWinError(r);
+}
+'@
+}
+
+function Get-ABUserRightSid {
+    <# SID qui détiennent un droit utilisateur (ex. SeBatchLogonRight), d'après secedit. #>
+    param([Parameter(Mandatory)][string]$Right)
+    $file = Join-Path $env:TEMP "ab-droits-$PID.inf"
+    & secedit.exe /export /cfg $file /areas USER_RIGHTS /quiet | Out-Null
+    $line = Get-Content -LiteralPath $file -Encoding Unicode | Where-Object { $_ -match "^\s*$Right\s*=" }
+    Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+    if (-not $line) { return @() }
+    return @(($line -split '=', 2)[1].Split(',') | ForEach-Object {
+            $v = $_.Trim()
+            if ($v.StartsWith('*')) { $v.Substring(1) } else { ConvertTo-ABSidString -Identity $v }
+        })
+}
+
+function Set-ABUserRight {
+    <# Ajoute ou retire un droit utilisateur à un SID (API LSA). #>
+    param([Parameter(Mandatory)][string]$Sid, [Parameter(Mandatory)][string]$Right, [Parameter(Mandatory)][bool]$Grant)
+    $s = New-Object Security.Principal.SecurityIdentifier($Sid)
+    $bytes = New-Object byte[] $s.BinaryLength
+    $s.GetBinaryForm($bytes, 0)
+    $err = [ABNative.Lsa]::Change($bytes, $Right, $Grant)
+    if ($err -ne 0) { throw "LSA : impossible de modifier $Right pour $Sid (erreur $err)." }
+}
+
+function Get-ABUserSid {
+    param([Parameter(Mandatory)][string]$Compte)
+    return (Get-LocalUser -Name $Compte -ErrorAction Stop).SID.Value
+}
+
+function Close-ABUserSession {
+    <# Ferme les sessions ouvertes d'un compte (profil déchargé ensuite). #>
+    param([Parameter(Mandatory)][string]$Compte)
+    # quser écrit « Aucun utilisateur » sur la sortie d'erreur : sans ceci, Stop arrêterait l'appelant (5.1)
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try { $lines = @(& quser.exe 2>&1 | Where-Object { $_ -is [string] } | Select-Object -Skip 1) }
+    finally { $ErrorActionPreference = $previous }
+    foreach ($l in $lines) {
+        $cols = ($l.Trim().TrimStart('>') -split '\s+')
+        if ($cols[0] -ne $Compte) { continue }
+        $id = $cols | Where-Object { $_ -match '^\d+$' } | Select-Object -First 1
+        if ($id) { & logoff.exe $id; Write-LabOK "Session $id de $Compte fermée." }
+    }
+}
+
+function Remove-ABUserProfile {
+    <#
+    Supprime le profil d'un employé (dossier et inscription), pour le recréer à neuf
+    entre deux équipes. Ferme d'abord ses sessions. Sans effet si absent.
+    #>
+    param([Parameter(Mandatory)][string]$Compte)
+    $user = Get-LocalUser -Name $Compte -ErrorAction SilentlyContinue
+    if ($user) {
+        Close-ABUserSession -Compte $Compte
+        # Ruche restée montée par un script interrompu (Mount-LabUserHive : HKU\LAB_<compte>)
+        if (Test-Path -LiteralPath "Registry::HKEY_USERS\LAB_$Compte") {
+            Dismount-LabUserHive -Hive ([pscustomobject]@{ Loaded = $true; MountName = "LAB_$Compte" })
+        }
+        $sid = $user.SID.Value
+        $deadline = (Get-Date).AddSeconds(60)
+        do {
+            $p = Get-CimInstance Win32_UserProfile -Filter "SID='$sid'"
+            if ($p -and $p.Loaded) { Start-Sleep -Seconds 2 }
+        } while ($p -and $p.Loaded -and (Get-Date) -lt $deadline)
+        if ($p) {
+            if ($p.Loaded) { throw "Le profil de $Compte est encore chargé : impossible de le recréer." }
+            Remove-CimInstance -InputObject $p
+            Write-LabOK "Profil de $Compte supprimé."
+        }
+    }
+    # Dossier orphelin (sinon CreateProfile créerait C:\Users\<compte>.<poste>)
+    $orphan = Join-Path $env:SystemDrive "Users\$Compte"
+    if (Test-Path -LiteralPath $orphan) { Remove-Item -LiteralPath $orphan -Recurse -Force; Write-LabOK "Dossier orphelin retiré : $orphan" }
+}
+
+function New-ABUserProfile {
+    <# Crée le profil (copie du profil par défaut, NTUSER.DAT inclus) sans ouverture de session. Retourne son chemin. #>
+    param([Parameter(Mandatory)][string]$Compte)
+    $sid = Get-ABUserSid -Compte $Compte
+    $existing = Get-CimInstance Win32_UserProfile -Filter "SID='$sid'"
+    if ($existing) { return $existing.LocalPath }
+    $sb = New-Object System.Text.StringBuilder 260
+    $hr = [ABNative.Profile]::CreateProfile($sid, $Compte, $sb, 260)
+    if ($hr -ne 0) { throw ("CreateProfile a échoué pour {0} (HRESULT 0x{1:X8})." -f $Compte, $hr) }
+    $path = $sb.ToString()
+    if (-not (Test-Path -LiteralPath (Join-Path $path 'NTUSER.DAT'))) { throw "Profil incomplet : $path (NTUSER.DAT absent)." }
+    return $path
+}
+
+function Invoke-ABUserHive {
+    <# Monte la ruche d'un employé, exécute $ScriptBlock (reçoit la racine Registry::...), puis la démonte. #>
+    param([Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][scriptblock]$ScriptBlock)
+    $hive = Mount-LabUserHive -UserName $Compte
+    try { & $ScriptBlock $hive.Root }
+    finally { Dismount-LabUserHive -Hive $hive }
+}
+
+# Réglages de l'interface dans la ruche (vérifiés par Test-ABUserProfile)
+function Get-ABShellSettingList {
+    param([Parameter(Mandatory)][string]$Wallpaper)
+    # Verifier = $false : valeur réécrite par Windows à la première ouverture de session
+    # (thème par défaut), donc écrite mais pas contrôlée. Vérifié en VM (24H2).
+    @(
+        # Fond d'écran AB par stratégie de l'utilisateur : il gagne sur le thème par défaut
+        # et sur « Windows à la une » à chaque ouverture (4 = remplir)
+        @{ Key = 'Software\Microsoft\Windows\CurrentVersion\Policies\System'; Name = 'Wallpaper'; Value = $Wallpaper; Type = 'String'; Verifier = $true }
+        @{ Key = 'Software\Microsoft\Windows\CurrentVersion\Policies\System'; Name = 'WallpaperStyle'; Value = '4'; Type = 'String'; Verifier = $true }
+        @{ Key = 'Control Panel\Desktop'; Name = 'Wallpaper'; Value = $Wallpaper; Type = 'String'; Verifier = $false }
+        @{ Key = 'Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers'; Name = 'BackgroundType'; Value = 0; Type = 'DWord'; Verifier = $false }
+        @{ Key = 'Software\Policies\Microsoft\Windows\CloudContent'; Name = 'DisableSpotlightCollectionOnDesktop'; Value = 1; Type = 'DWord'; Verifier = $true }
+        @{ Key = 'Software\Policies\Microsoft\Windows\CloudContent'; Name = 'DisableWindowsSpotlightFeatures'; Value = 1; Type = 'DWord'; Verifier = $true }
+        # Menu Démarrer qui s'ouvre seul à la première ouverture de session (vérifié en VM)
+        @{ Key = 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'; Name = 'StartShownOnUpgrade'; Value = 1; Type = 'DWord'; Verifier = $false }
+        # « Terminons la configuration de votre appareil » et accueil après mise à jour
+        @{ Key = 'Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement'; Name = 'ScoobeSystemSettingEnabled'; Value = 0; Type = 'DWord'; Verifier = $false }
+        @{ Key = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'; Name = 'SubscribedContent-310093Enabled'; Value = 0; Type = 'DWord'; Verifier = $false }
+    )
+}
+
+function Set-ABUserShellSetting {
+    <# Applique les réglages d'interface et retire OneDriveSetup de la clé Run (ruche montée). #>
+    param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$Wallpaper)
+    foreach ($s in Get-ABShellSettingList -Wallpaper $Wallpaper) {
+        Set-LabRegistryValue -Path (Join-Path $Root $s.Key) -Name $s.Name -Value $s.Value -Type $s.Type
+    }
+    $run = Join-Path $Root 'Software\Microsoft\Windows\CurrentVersion\Run'
+    if (Test-Path -LiteralPath $run) { Remove-ItemProperty -LiteralPath $run -Name 'OneDriveSetup' -ErrorAction SilentlyContinue }
+}
+
+function Set-ABUserNetworkDrive {
+    <# Lecteur réseau persistant (HKCU\Network\<lettre>), restauré par Windows à l'ouverture de session. #>
+    param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$Letter, [Parameter(Mandatory)][string]$RemotePath)
+    $k = Join-Path $Root "Network\$($Letter.TrimEnd(':'))"
+    Set-LabRegistryValue -Path $k -Name 'RemotePath' -Value $RemotePath -Type String
+    Set-LabRegistryValue -Path $k -Name 'UserName' -Value '' -Type String
+    Set-LabRegistryValue -Path $k -Name 'ProviderName' -Value 'Microsoft Windows Network' -Type String
+    Set-LabRegistryValue -Path $k -Name 'ProviderType' -Value 0x20000 -Type DWord
+    Set-LabRegistryValue -Path $k -Name 'ConnectionType' -Value 1 -Type DWord
+    Set-LabRegistryValue -Path $k -Name 'DeferFlags' -Value 4 -Type DWord
+}
+
+function Get-ABEmployeeDrive {
+    <# Lecteurs d'un employé : @{ Lettre = '\\AB-SRV-01\Partage' }. #>
+    param([Parameter(Mandatory)]$Employe)
+    $cfg = Get-ABConfig
+    $map = [ordered]@{}
+    foreach ($l in $Employe.Lecteurs) {
+        $share = $cfg.Partages | Where-Object { $_.Lecteur -eq $l } | Select-Object -First 1
+        if (-not $share) { throw "Aucun partage pour le lecteur $l dans AB-Config.psd1." }
+        $map[$l] = "\\$($cfg.Reseau.Serveur)\$($share.Nom)"
+    }
+    return $map
+}
+
+function Resolve-ABUserTarget {
+    <# Cible d'une ligne de manifeste : absolue (C:\...) ou relative au profil. #>
+    param([Parameter(Mandatory)][string]$ProfilePath, [Parameter(Mandatory)][string]$Target)
+    if ($Target -match '^[A-Za-z]:\\') { return $Target }
+    return (Join-Path $ProfilePath $Target)
+}
+
+function Copy-ABUserData {
+    <#
+    Copie les fichiers d'un manifeste (SourceRelative;TargetRelative;CreationTime;
+    LastWriteTime;Criticality) : dates appliquées, propriété donnée à l'employé.
+    #>
+    param([Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][string]$ProfilePath,
+        [Parameter(Mandatory)][string]$DataRoot, [Parameter(Mandatory)][string]$Manifest)
+    $rows = @(Import-Csv -LiteralPath $Manifest -Delimiter ';' -Encoding UTF8)
+    $owner = "$env:COMPUTERNAME\$Compte"
+    foreach ($r in $rows) {
+        $dst = Resolve-ABUserTarget -ProfilePath $ProfilePath -Target $r.TargetRelative
+        $dir = Split-Path -Parent $dst
+        if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        Copy-Item -LiteralPath (Join-Path $DataRoot $r.SourceRelative) -Destination $dst -Force
+        Set-LabItemTime -Path $dst -Created ([datetime]$r.CreationTime) -Modified ([datetime]$r.LastWriteTime)
+        & icacls.exe $dst /setowner $owner /C /Q | Out-Null
+    }
+    return $rows.Count
+}
+
+function New-ABShortcut {
+    <# Raccourci .lnk (WScript.Shell). #>
+    param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Target, [string]$Arguments = '', [string]$Icon = '')
+    $dir = Split-Path -Parent $Path
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $shell = New-Object -ComObject WScript.Shell
+    $lnk = $shell.CreateShortcut($Path)
+    $lnk.TargetPath = $Target
+    if ($Arguments) { $lnk.Arguments = $Arguments }
+    if ($Icon) { $lnk.IconLocation = $Icon }
+    $lnk.Save()
+    [void][Runtime.InteropServices.Marshal]::ReleaseComObject($shell)
+}
+
+function Invoke-ABAsUser {
+    <#
+    Exécute une commande SOUS L'IDENTITÉ d'un employé (session fermée) : tâche planifiée
+    ponctuelle avec son mot de passe, supprimée ensuite. Un utilisateur standard n'a pas
+    le droit « Ouvrir une session en tant que tâche » : il est octroyé le temps de la
+    tâche puis retiré (retour vérifié). Retourne le code de sortie de la commande.
+    Sert à ce qui n'existe que dans la session (cmdkey : chiffré par l'utilisateur).
+    #>
+    param(
+        [Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][string]$Password,
+        [Parameter(Mandatory)][string]$Execute, [string]$Arguments = '',
+        [int]$TimeoutSeconds = 120
+    )
+    $right = 'SeBatchLogonRight'
+    $sid = Get-ABUserSid -Compte $Compte
+    $granted = $false
+    if ((Get-ABUserRightSid -Right $right) -notcontains $sid) { Set-ABUserRight -Sid $sid -Right $right -Grant $true; $granted = $true }
+    $name = 'CFRN-Lab-' + [guid]::NewGuid().ToString('N').Substring(0, 8)
+    try {
+        $action = New-ScheduledTaskAction -Execute $Execute -Argument $Arguments
+        if (-not $Arguments) { $action = New-ScheduledTaskAction -Execute $Execute }
+        Register-ScheduledTask -TaskName $name -Action $action -User "$env:COMPUTERNAME\$Compte" -Password $Password -RunLevel Limited -Force | Out-Null
+        Start-ScheduledTask -TaskName $name
+        $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+        do {
+            Start-Sleep -Seconds 2
+            $info = Get-ScheduledTaskInfo -TaskName $name
+            $state = (Get-ScheduledTask -TaskName $name).State
+        } while ((($info.LastRunTime.Year -lt 2000) -or ($state -eq 'Running')) -and ((Get-Date) -lt $deadline))
+        if ($info.LastRunTime.Year -lt 2000) { throw "La tâche sous l'identité de $Compte n'a pas démarré (0x$('{0:X}' -f $info.LastTaskResult))." }
+        if ($state -eq 'Running') { throw "La tâche sous l'identité de $Compte dépasse $TimeoutSeconds s." }
+        return [int]$info.LastTaskResult
+    } finally {
+        Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
+        if ($granted) {
+            Set-ABUserRight -Sid $sid -Right $right -Grant $false
+            if ((Get-ABUserRightSid -Right $right) -contains $sid) { Write-LabWarn "$right n'a pas pu être retiré à $Compte." }
+        }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Stratégies machine (HKLM) des postes
+# ---------------------------------------------------------------------------
+function Get-ABMachinePolicyList {
+    <# Stratégies HKLM des postes : première ouverture de session et LibreOffice (vérifiées par Test-ABMachinePolicy). #>
+    $lo = 'HKLM:\SOFTWARE\Policies\LibreOffice'
+    $list = @(
+        @{ Path = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; Name = 'EnableFirstLogonAnimation'; Value = 0; Type = 'DWord' }
+        @{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OOBE'; Name = 'DisablePrivacyExperience'; Value = 1; Type = 'DWord' }
+    )
+    # LibreOffice : ni conseils du jour ni « Quoi de neuf » (nœuds lus dans main.xcd de la version installée)
+    foreach ($node in 'org.openoffice.Office.Common\Misc\ShowTipOfTheDay', 'org.openoffice.Office.UI.Infobar\Enabled\WhatsNew', 'org.openoffice.Setup\Product\WhatsNew') {
+        $list += @{ Path = "$lo\$node"; Name = 'Value'; Value = 'false'; Type = 'String' }
+        $list += @{ Path = "$lo\$node"; Name = 'Type'; Value = 'xs:boolean'; Type = 'String' }
+        $list += @{ Path = "$lo\$node"; Name = 'Final'; Value = 1; Type = 'DWord' }
+    }
+    return $list
+}
+
+function Set-ABMachinePolicy {
+    foreach ($p in Get-ABMachinePolicyList) { Set-LabRegistryValue -Path $p.Path -Name $p.Name -Value $p.Value -Type $p.Type }
+}
+
+function Test-ABMachinePolicy {
+    <# Liste des écarts (vide si conforme). #>
+    foreach ($p in Get-ABMachinePolicyList) {
+        $s = Get-LabRegistrySnapshot -Path $p.Path -Name $p.Name
+        if (-not $s.Exists -or "$($s.Value)" -ne "$($p.Value)") { "$($p.Path)\$($p.Name) différent de $($p.Value)" }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Orchestration et vérification
+# ---------------------------------------------------------------------------
+function Initialize-ABEmployeeProfile {
+    <#
+    Moteur commun aux 4 Setup de poste : profil RECRÉÉ à neuf (décision : entre deux
+    équipes), compte, CreateProfile, réglages de la ruche (interface, lecteurs), données
+    du manifeste, raccourcis du Bureau. Retourne le chemin du profil.
+    $Raccourcis : objets { Nom; Cible; Arguments; Icone } créés dans <profil>\Desktop.
+    #>
+    param(
+        [Parameter(Mandatory)]$Employe,
+        [Parameter(Mandatory)][string]$Wallpaper,
+        [string]$DataRoot, [string]$Manifest,
+        [object[]]$Raccourcis = @()
+    )
+    Remove-ABUserProfile -Compte $Employe.Compte
+    Set-ABEmployeeAccount -Employe $Employe
+    $path = New-ABUserProfile -Compte $Employe.Compte
+    Write-LabOK "Profil créé : $path"
+    $drives = Get-ABEmployeeDrive -Employe $Employe
+    $wp = $Wallpaper   # lu par le bloc ci-dessous (portée dynamique)
+    Invoke-ABUserHive -Compte $Employe.Compte -ScriptBlock {
+        param($Root)
+        Set-ABUserShellSetting -Root $Root -Wallpaper $wp
+        foreach ($l in $drives.Keys) { Set-ABUserNetworkDrive -Root $Root -Letter $l -RemotePath $drives[$l] }
+    }
+    Write-LabOK "Ruche : interface AB, lecteurs $(($drives.Keys | ForEach-Object { "$($_): $($drives[$_])" }) -join ', ')"
+    if ($Manifest -and (Test-Path -LiteralPath $Manifest)) {
+        $n = Copy-ABUserData -Compte $Employe.Compte -ProfilePath $path -DataRoot $DataRoot -Manifest $Manifest
+        Write-LabOK "$n fichiers de données copiés."
+    } elseif ($Manifest) {
+        Write-LabWarn "Manifeste absent ($Manifest) : aucune donnée copiée."
+    }
+    foreach ($s in $Raccourcis) {
+        New-ABShortcut -Path (Join-Path $path "Desktop\$($s.Nom).lnk") -Target $s.Cible -Arguments ([string]$s['Arguments']) -Icon ([string]$s['Icone'])
+    }
+    if ($Raccourcis) {
+        $owner = "$env:COMPUTERNAME\$($Employe.Compte)"
+        & icacls.exe (Join-Path $path 'Desktop\*.lnk') /setowner $owner /C /Q | Out-Null
+        Write-LabOK "$(@($Raccourcis).Count) raccourcis sur le Bureau."
+    }
+    return $path
+}
+
+function Test-ABUserProfile {
+    <# Écarts du profil d'un employé par rapport à l'état attendu (vide si conforme). #>
+    param(
+        [Parameter(Mandatory)]$Employe, [Parameter(Mandatory)][string]$Wallpaper,
+        [string]$DataRoot, [string]$Manifest
+    )
+    $user = Get-LocalUser -Name $Employe.Compte -ErrorAction SilentlyContinue
+    if (-not $user) { return "$($Employe.Compte) absent" }
+    $p = Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'"
+    if (-not $p) { return "profil de $($Employe.Compte) absent" }
+    $problems = @()
+    $expectedPath = Join-Path $env:SystemDrive "Users\$($Employe.Compte)"
+    if ($p.LocalPath -ne $expectedPath) { $problems += "profil dans $($p.LocalPath) (attendu $expectedPath)" }
+    foreach ($d in 'NTUSER.DAT', 'Desktop', 'Documents', 'Downloads', 'Pictures', 'AppData\Roaming') {
+        if (-not (Test-Path -LiteralPath (Join-Path $p.LocalPath $d))) { $problems += "$d absent du profil" }
+    }
+    if (-not (Test-Path -LiteralPath $Wallpaper)) { $problems += "fond d'écran absent : $Wallpaper" }
+    $drives = Get-ABEmployeeDrive -Employe $Employe
+    $hive = Mount-LabUserHive -UserName $Employe.Compte
+    try {
+        foreach ($s in Get-ABShellSettingList -Wallpaper $Wallpaper | Where-Object { $_.Verifier }) {
+            $snap = Get-LabRegistrySnapshot -Path (Join-Path $hive.Root $s.Key) -Name $s.Name
+            if (-not $snap.Exists -or "$($snap.Value)" -ne "$($s.Value)") { $problems += "HKCU\$($s.Key)\$($s.Name) différent de $($s.Value)" }
+        }
+        foreach ($l in $drives.Keys) {
+            $snap = Get-LabRegistrySnapshot -Path (Join-Path $hive.Root "Network\$l") -Name 'RemotePath'
+            if (-not $snap.Exists -or $snap.Value -ne $drives[$l]) { $problems += "lecteur $($l): différent de $($drives[$l])" }
+        }
+        $net = Join-Path $hive.Root 'Network'
+        if (Test-Path -LiteralPath $net) {
+            foreach ($k in Get-ChildItem -LiteralPath $net) {
+                if (-not $drives.Contains($k.PSChildName)) { $problems += "lecteur $($k.PSChildName): en trop" }
+                $k.Close()   # sinon la ruche ne se démonte plus
+            }
+        }
+    } finally { Dismount-LabUserHive -Hive $hive }
+    if (Test-Path -LiteralPath "Registry::HKEY_USERS\LAB_$($Employe.Compte)") {
+        $problems += "ruche LAB_$($Employe.Compte) encore montée : l'employé aurait un profil temporaire"
+    }
+    if ($Manifest -and (Test-Path -LiteralPath $Manifest)) {
+        foreach ($r in Import-Csv -LiteralPath $Manifest -Delimiter ';' -Encoding UTF8) {
+            $dst = Resolve-ABUserTarget -ProfilePath $p.LocalPath -Target $r.TargetRelative
+            if (-not (Test-Path -LiteralPath $dst)) { $problems += "fichier absent : $dst" }
+            elseif ((Get-FileHash -LiteralPath $dst).Hash -ne (Get-FileHash -LiteralPath (Join-Path $DataRoot $r.SourceRelative)).Hash) { $problems += "fichier modifié : $dst" }
+        }
+    }
+    return $problems
+}
+
 Export-ModuleMember -Function *
