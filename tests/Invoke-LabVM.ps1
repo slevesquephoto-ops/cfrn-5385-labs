@@ -16,6 +16,8 @@
     .\tests\Invoke-LabVM.ps1 -VMName AB-PC-03-T -Action Push -Path .\common, .\AB
     .\tests\Invoke-LabVM.ps1 -VMName AB-PC-03-T -Action Run -ScriptPath C:\Lab\AB\PC-03\Panne-PC-03.ps1 -ArgumentList '-Variante','A'
     .\tests\Invoke-LabVM.ps1 -VMName AB-PC-03-T -Action Pull -Source C:\ProgramData\CFRN-Lab\Logs
+    .\tests\Invoke-LabVM.ps1 -VMName AB-PC-03-T -Action Stop       # arrêt propre du système invité (RAM)
+    .\tests\Invoke-LabVM.ps1 -VMName AB-PC-03-T -Action Capture    # image de la console -> tests\logs\<VM>\
 #>
 [CmdletBinding()]
 param(
@@ -24,7 +26,7 @@ param(
     [string]$VMName,
 
     [Parameter(Mandatory)]
-    [ValidateSet('Status', 'Ping', 'Reset', 'Push', 'Run', 'Pull')]
+    [ValidateSet('Status', 'Ping', 'Reset', 'Push', 'Run', 'Pull', 'Stop', 'Capture')]
     [string]$Action,
 
     # Push : dossiers ou fichiers locaux, copiés sous $Destination\<nom>
@@ -157,5 +159,44 @@ switch ($Action) {
             Copy-Item -Path $Source -Destination $local -FromSession $s -Recurse -Force
         } finally { Remove-PSSession $s }
         Write-Host "[OK] $Source -> $local"
+    }
+
+    'Stop' {
+        # Arrêt propre par les services d'intégration (jamais -TurnOff), pour libérer la RAM
+        if ($vm.State -eq 'Off') { Write-Host "[OK] $VMName est déjà arrêtée."; break }
+        Stop-VM -Name $VMName -Force
+        $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+        while ((Get-Date) -lt $deadline -and (Get-VM -Name $VMName).State -ne 'Off') { Start-Sleep -Seconds 3 }
+        if ((Get-VM -Name $VMName).State -ne 'Off') { throw "$VMName ne s'est pas arrêtée après $TimeoutSeconds s." }
+        Write-Host "[OK] $VMName arrêtée."
+    }
+
+    'Capture' {
+        # Lecture seule : miniature de la console (Msvm_VirtualSystemManagementService), en PNG
+        if ($vm.State -ne 'Running') { throw "$VMName n'est pas démarrée (état : $($vm.State))." }
+        $ns = 'root\virtualization\v2'
+        $cs = Get-CimInstance -Namespace $ns -ClassName Msvm_ComputerSystem -Filter "Name='$($vm.Id)'"
+        $vssd = Get-CimAssociatedInstance -InputObject $cs -ResultClassName Msvm_VirtualSystemSettingData |
+            Where-Object { $_.VirtualSystemType -eq 'Microsoft:Hyper-V:System:Realized' }
+        $head = Get-CimInstance -Namespace $ns -ClassName Msvm_VideoHead | Where-Object { $_.SystemName -eq $vm.Id.ToString() } | Select-Object -First 1
+        $w = 1024; $h = 768
+        if ($head -and $head.CurrentHorizontalResolution) { $w = [int]$head.CurrentHorizontalResolution; $h = [int]$head.CurrentVerticalResolution }
+        $svc = Get-CimInstance -Namespace $ns -ClassName Msvm_VirtualSystemManagementService
+        $r = Invoke-CimMethod -InputObject $svc -MethodName GetVirtualSystemThumbnailImage `
+            -Arguments @{ TargetSystem = $vssd; WidthPixels = [uint16]$w; HeightPixels = [uint16]$h }
+        if ($r.ReturnValue -ne 0 -or -not $r.ImageData) { throw "Capture refusée par Hyper-V (code $($r.ReturnValue))." }
+        Add-Type -AssemblyName System.Drawing
+        $bmp = New-Object System.Drawing.Bitmap($w, $h, [System.Drawing.Imaging.PixelFormat]::Format16bppRgb565)
+        $data = $bmp.LockBits((New-Object System.Drawing.Rectangle(0, 0, $w, $h)), 'WriteOnly', $bmp.PixelFormat)
+        for ($y = 0; $y -lt $h; $y++) {
+            [Runtime.InteropServices.Marshal]::Copy([byte[]]$r.ImageData, $y * $w * 2, [IntPtr]($data.Scan0.ToInt64() + $y * $data.Stride), $w * 2)
+        }
+        $bmp.UnlockBits($data)
+        $local = Join-Path $RepoRoot "tests\logs\$VMName"
+        if (-not (Test-Path $local)) { New-Item -ItemType Directory -Path $local -Force | Out-Null }
+        $file = Join-Path $local "capture-$(Get-Date -Format 'yyyyMMdd-HHmmss').png"
+        $bmp.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
+        $bmp.Dispose()
+        Write-Host "[OK] Capture ${w}x${h} : $file"
     }
 }

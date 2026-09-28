@@ -191,4 +191,276 @@ function Test-ABWindowsUpdateLock {
     return (New-LabCheck -Name 'windows-update' -Passed ($problems.Count -eq 0) -Detail $detail)
 }
 
+# ---------------------------------------------------------------------------
+# Identités (SID : Windows est en français, aucun nom localisé en dur)
+# ---------------------------------------------------------------------------
+$script:WellKnownSid = @{
+    'Administrateurs'           = 'S-1-5-32-544'
+    'Utilisateurs'              = 'S-1-5-32-545'
+    'SYSTEM'                    = 'S-1-5-18'
+    'Utilisateurs authentifiés' = 'S-1-5-11'
+    'Tout le monde'             = 'S-1-1-0'
+}
+
+function Get-ABSid {
+    <# SID (objet) d'un nom connu (table ci-dessus) ou d'un compte/groupe local. #>
+    param([Parameter(Mandatory)][string]$Name)
+    if ($script:WellKnownSid.ContainsKey($Name)) { return (New-Object Security.Principal.SecurityIdentifier($script:WellKnownSid[$Name])) }
+    $acct = New-Object Security.Principal.NTAccount($env:COMPUTERNAME, $Name)
+    return $acct.Translate([Security.Principal.SecurityIdentifier])
+}
+
+function ConvertTo-ABSidString {
+    <# SID texte d'une IdentityReference ou d'un nom de compte ; le texte d'origine si inconnu. #>
+    param([Parameter(Mandatory)]$Identity)
+    try {
+        if ($Identity -is [Security.Principal.IdentityReference]) { return $Identity.Translate([Security.Principal.SecurityIdentifier]).Value }
+        return (New-Object Security.Principal.NTAccount([string]$Identity)).Translate([Security.Principal.SecurityIdentifier]).Value
+    } catch { return [string]$Identity }
+}
+
+# ---------------------------------------------------------------------------
+# Comptes locaux
+# ---------------------------------------------------------------------------
+if (-not ('ABNative.Logon' -as [type])) {
+    Add-Type -Namespace ABNative -Name Logon -MemberDefinition @'
+[DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+public static extern bool LogonUser(string user, string domain, string password, int logonType, int provider, out IntPtr token);
+[DllImport("kernel32.dll")]
+public static extern bool CloseHandle(IntPtr handle);
+'@
+}
+
+function Test-ABLocalPassword {
+    <#
+    Vrai si le mot de passe ouvre une session RÉSEAU pour ce compte local (LogonUser,
+    type 3) : même vérification qu'un accès SMB, aucun profil chargé, aucune trace visible.
+    Un échec compte comme tentative ratée : sans effet sur SRV-01 (verrouillage désactivé).
+    #>
+    param([Parameter(Mandatory)][string]$UserName, [Parameter(Mandatory)][string]$Password)
+    $token = [IntPtr]::Zero
+    $ok = [ABNative.Logon]::LogonUser($UserName, $env:COMPUTERNAME, $Password, 3, 0, [ref]$token)
+    if ($ok) { [void][ABNative.Logon]::CloseHandle($token) }
+    return $ok
+}
+
+function Set-ABEmployeeAccount {
+    <#
+    Crée ou remet à l'état LAB le compte local d'un employé (entrée Employes de la config) :
+    utilisateur standard, mot de passe LAB, sans expiration, activé.
+    #>
+    param([Parameter(Mandatory)]$Employe)
+    $secure = ConvertTo-SecureString $Employe.MotDePasse -AsPlainText -Force
+    $user = Get-LocalUser -Name $Employe.Compte -ErrorAction SilentlyContinue
+    if (-not $user) {
+        New-LocalUser -Name $Employe.Compte -Password $secure -FullName $Employe.NomComplet -Description $Employe.Role `
+            -PasswordNeverExpires -AccountNeverExpires | Out-Null
+    } else {
+        Set-LocalUser -Name $Employe.Compte -Password $secure -FullName $Employe.NomComplet -Description $Employe.Role `
+            -PasswordNeverExpires $true -AccountNeverExpires
+        Enable-LocalUser -Name $Employe.Compte
+    }
+    Set-LocalUser -Name $Employe.Compte -UserMayChangePassword $true
+    $sid = (Get-LocalUser -Name $Employe.Compte).SID.Value
+    $users = Get-ABSid -Name 'Utilisateurs'
+    if (-not (Get-ABGroupMemberSid -GroupSid $users.Value | Where-Object { $_ -eq $sid })) { Add-LocalGroupMember -SID $users.Value -Member $sid }
+    $admins = Get-ABSid -Name 'Administrateurs'
+    if (Get-ABGroupMemberSid -GroupSid $admins.Value | Where-Object { $_ -eq $sid }) { Remove-LocalGroupMember -SID $admins.Value -Member $sid }
+}
+
+function Set-ABAdminAccount {
+    <# ab-tech : administrateur, mot de passe sans expiration. Son mot de passe n'est JAMAIS modifié (PowerShell Direct). #>
+    $name = (Get-ABConfig).Administrateur
+    $user = Get-LocalUser -Name $name -ErrorAction Stop
+    Set-LocalUser -Name $name -PasswordNeverExpires $true
+    $admins = Get-ABSid -Name 'Administrateurs'
+    if (-not (Get-ABGroupMemberSid -GroupSid $admins.Value | Where-Object { $_ -eq $user.SID.Value })) { Add-LocalGroupMember -SID $admins.Value -Member $user.SID.Value }
+}
+
+function Get-ABGroupMemberSid {
+    <# SID des membres directs d'un groupe local (ADSI : Get-LocalGroupMember échoue sur un SID orphelin). #>
+    param([Parameter(Mandatory)][string]$GroupSid)
+    $name = (New-Object Security.Principal.SecurityIdentifier($GroupSid)).Translate([Security.Principal.NTAccount]).Value.Split('\')[-1]
+    $group = [ADSI]"WinNT://$env:COMPUTERNAME/$name,group"
+    foreach ($m in @($group.Invoke('Members'))) {
+        $bytes = [byte[]]$m.GetType().InvokeMember('objectSid', 'GetProperty', $null, $m, $null)
+        (New-Object Security.Principal.SecurityIdentifier($bytes, 0)).Value
+    }
+}
+
+function Set-ABGroupMembership {
+    <# Crée le groupe local au besoin et impose EXACTEMENT la liste des membres (comptes locaux). #>
+    param([Parameter(Mandatory)][string]$Group, [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$Members)
+    if (-not (Get-LocalGroup -Name $Group -ErrorAction SilentlyContinue)) {
+        New-LocalGroup -Name $Group -Description "Architecture Boréale" | Out-Null
+    }
+    $gsid = (Get-LocalGroup -Name $Group).SID.Value
+    $wanted = @($Members | ForEach-Object { (Get-ABSid -Name $_).Value })
+    $current = @(Get-ABGroupMemberSid -GroupSid $gsid)
+    foreach ($s in $wanted) { if ($current -notcontains $s) { Add-LocalGroupMember -SID $gsid -Member $s } }
+    foreach ($s in $current) { if ($wanted -notcontains $s) { Remove-LocalGroupMember -SID $gsid -Member $s } }
+}
+
+# ---------------------------------------------------------------------------
+# Politique de mots de passe AB (stratégie de sécurité locale, secedit)
+# ---------------------------------------------------------------------------
+function Get-ABPasswordPolicyTarget {
+    param([Parameter(Mandatory)][string]$Machine)
+    $p = (Get-ABConfig).PolitiqueMotsDePasse
+    $t = [ordered]@{
+        MinimumPasswordLength = [int]$p.LongueurMinimale
+        PasswordComplexity    = [int]$p.Complexite
+        PasswordHistorySize   = [int]$p.Historique
+    }
+    if ($p.Verrouillage.ContainsKey($Machine)) { $t['LockoutBadCount'] = [int]$p.Verrouillage[$Machine] }
+    return $t
+}
+
+function Get-ABSecurityPolicy {
+    <# Valeurs [System Access] actuelles (secedit /export). #>
+    $file = Join-Path $env:TEMP "ab-secpol-$PID.inf"
+    & secedit.exe /export /cfg $file /areas SECURITYPOLICY /quiet | Out-Null
+    $values = @{}
+    foreach ($line in (Get-Content -LiteralPath $file -Encoding Unicode)) {
+        if ($line -match '^\s*(\w+)\s*=\s*(-?\d+)\s*$') { $values[$Matches[1]] = [int]$Matches[2] }
+    }
+    Remove-Item -LiteralPath $file -Force -ErrorAction SilentlyContinue
+    return $values
+}
+
+function Set-ABPasswordPolicy {
+    param([Parameter(Mandatory)][string]$Machine)
+    $target = Get-ABPasswordPolicyTarget -Machine $Machine
+    $inf = Join-Path $env:TEMP "ab-secpol-set-$PID.inf"
+    $db = Join-Path $env:TEMP "ab-secpol-$PID.sdb"
+    $lines = @('[Unicode]', 'Unicode=yes', '[Version]', 'signature="$CHICAGO$"', 'Revision=1', '[System Access]')
+    foreach ($k in $target.Keys) { $lines += "$k = $($target[$k])" }
+    Set-Content -LiteralPath $inf -Value $lines -Encoding Unicode
+    & secedit.exe /configure /db $db /cfg $inf /areas SECURITYPOLICY /quiet | Out-Null
+    $code = $LASTEXITCODE
+    Remove-Item -LiteralPath $inf, $db -Force -ErrorAction SilentlyContinue
+    if ($code -ne 0) { throw "secedit /configure a échoué (code $code)." }
+}
+
+function Test-ABPasswordPolicy {
+    <# Contrôle New-LabCheck 'politique-mdp'. #>
+    param([Parameter(Mandatory)][string]$Machine)
+    $target = Get-ABPasswordPolicyTarget -Machine $Machine
+    $current = Get-ABSecurityPolicy
+    $diff = @()
+    foreach ($k in $target.Keys) { if ($current[$k] -ne $target[$k]) { $diff += "$k=$($current[$k]) (attendu $($target[$k]))" } }
+    $detail = 'conforme'
+    if ($diff) { $detail = $diff -join '; ' }
+    return (New-LabCheck -Name 'politique-mdp' -Passed ($diff.Count -eq 0) -Detail $detail)
+}
+
+# ---------------------------------------------------------------------------
+# NTFS
+# ---------------------------------------------------------------------------
+$script:SyncRight = [int][Security.AccessControl.FileSystemRights]::Synchronize
+
+function ConvertTo-ABFileRight {
+    param([Parameter(Mandatory)][ValidateSet('Modification', 'Lecture', 'ControleTotal')][string]$Level)
+    switch ($Level) {
+        'Modification'  { [Security.AccessControl.FileSystemRights]::Modify }
+        'Lecture'       { [Security.AccessControl.FileSystemRights]::ReadAndExecute }
+        'ControleTotal' { [Security.AccessControl.FileSystemRights]::FullControl }
+    }
+}
+
+function Get-ABExpectedRootRule {
+    <# Règles attendues à la racine d'un partage : « SID|droits|type|héritage » triées. #>
+    param([Parameter(Mandatory)]$Partage)
+    # Même normalisation que Get-ABExplicitRule : sans le bit Synchronize (inclus dans FullControl)
+    $full = [int][Security.AccessControl.FileSystemRights]::FullControl -band (-bnot $script:SyncRight)
+    $rules = @(
+        "$((Get-ABSid -Name 'Administrateurs').Value)|$full|Allow|3",
+        "$((Get-ABSid -Name 'SYSTEM').Value)|$full|Allow|3"
+    )
+    foreach ($k in $Partage.Droits.Keys) {
+        $rights = [int](ConvertTo-ABFileRight -Level $Partage.Droits[$k]) -band (-bnot $script:SyncRight)
+        $rules += "$((Get-ABSid -Name $k).Value)|$rights|Allow|3"
+    }
+    return @($rules | Sort-Object)
+}
+
+function Get-ABExplicitRule {
+    <# Règles explicites d'un dossier, normalisées comme Get-ABExpectedRootRule. #>
+    param([Parameter(Mandatory)][string]$Path)
+    $acl = Get-Acl -LiteralPath $Path
+    @($acl.Access | Where-Object { -not $_.IsInherited } | ForEach-Object {
+            $rights = [int]$_.FileSystemRights -band (-bnot $script:SyncRight)
+            "$(ConvertTo-ABSidString -Identity $_.IdentityReference)|$rights|$($_.AccessControlType)|$([int]$_.InheritanceFlags)"
+        } | Sort-Object)
+}
+
+function Set-ABRootAcl {
+    <# Racine d'un partage : héritage coupé, Administrateurs et SYSTEM en Contrôle total, droits de la config. #>
+    param([Parameter(Mandatory)]$Partage)
+    $inherit = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+    $acl = New-Object Security.AccessControl.DirectorySecurity
+    $acl.SetAccessRuleProtection($true, $false)
+    $acl.SetOwner((Get-ABSid -Name 'Administrateurs'))
+    $entries = @(@{ Sid = (Get-ABSid -Name 'Administrateurs'); Rights = 'ControleTotal' }, @{ Sid = (Get-ABSid -Name 'SYSTEM'); Rights = 'ControleTotal' })
+    foreach ($k in $Partage.Droits.Keys) { $entries += @{ Sid = (Get-ABSid -Name $k); Rights = $Partage.Droits[$k] } }
+    foreach ($e in $entries) {
+        $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($e.Sid, (ConvertTo-ABFileRight -Level $e.Rights), $inherit, 'None', 'Allow')))
+    }
+    Set-Acl -LiteralPath $Partage.Dossier -AclObject $acl
+}
+
+function Reset-ABChildAcl {
+    <# Tous les descendants d'un dossier en héritage pur (aucune règle explicite). #>
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Get-ChildItem -LiteralPath $Path -Force | Select-Object -First 1)) { return }
+    & icacls.exe (Join-Path $Path '*') /reset /T /C /Q | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "icacls /reset a échoué sur $Path (code $LASTEXITCODE)." }
+}
+
+function Get-ABAclSnapshot {
+    <# SDDL (partie Accès) et héritage d'un dossier et de tous ses descendants, parents d'abord. #>
+    param([Parameter(Mandatory)][string]$Path)
+    $items = @(Get-Item -LiteralPath $Path -Force) + @(Get-ChildItem -LiteralPath $Path -Recurse -Force)
+    foreach ($i in $items) {
+        $acl = Get-Acl -LiteralPath $i.FullName
+        [pscustomobject]@{ Path = $i.FullName; Sddl = $acl.GetSecurityDescriptorSddlForm('Access'); Protected = $acl.AreAccessRulesProtected }
+    }
+}
+
+function Restore-ABAclSnapshot {
+    <# Remet exactement les SDDL enregistrés par Get-ABAclSnapshot (parents d'abord). #>
+    param([Parameter(Mandatory)][object[]]$Snapshot)
+    foreach ($s in $Snapshot) {
+        if (-not (Test-Path -LiteralPath $s.Path)) { Write-LabWarn "Absent, non restauré : $($s.Path)"; continue }
+        $acl = Get-Acl -LiteralPath $s.Path
+        $acl.SetSecurityDescriptorSddlForm($s.Sddl, 'Access')
+        Set-Acl -LiteralPath $s.Path -AclObject $acl
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Partages SMB
+# ---------------------------------------------------------------------------
+function Get-ABShareAccess {
+    <# Accès d'un partage : « SID|droit|type » triés. #>
+    param([Parameter(Mandatory)][string]$Name)
+    @(Get-SmbShareAccess -Name $Name | ForEach-Object {
+            "$(ConvertTo-ABSidString -Identity $_.AccountName)|$($_.AccessRight)|$($_.AccessControlType)"
+        } | Sort-Object)
+}
+
+function Set-ABShareAccess {
+    <# Remplace les accès d'un partage par la liste donnée (objets { Sid; Right; Type }). #>
+    param([Parameter(Mandatory)][string]$Name, [Parameter(Mandatory)][object[]]$Entries)
+    foreach ($a in @(Get-SmbShareAccess -Name $Name)) {
+        if ($a.AccessControlType -eq 'Deny') { Unblock-SmbShareAccess -Name $Name -AccountName $a.AccountName -Force | Out-Null }
+        else { Revoke-SmbShareAccess -Name $Name -AccountName $a.AccountName -Force | Out-Null }
+    }
+    foreach ($e in $Entries) {
+        $account = (New-Object Security.Principal.SecurityIdentifier($e.Sid)).Translate([Security.Principal.NTAccount]).Value
+        if ($e.Type -eq 'Deny') { Block-SmbShareAccess -Name $Name -AccountName $account -Force | Out-Null }
+        else { Grant-SmbShareAccess -Name $Name -AccountName $account -AccessRight $e.Right -Force | Out-Null }
+    }
+}
+
 Export-ModuleMember -Function *

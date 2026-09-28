@@ -64,11 +64,38 @@
         Verrouillage     = @{ 'SRV-01' = 0 }
     }
 
+    # Arborescence minimale créée par Setup-SRV-01 (relative à la racine de chaque partage),
+    # même sans données : les pannes R1 et R6 en dépendent. Les fichiers viennent du manifeste.
+    Arborescence = @{
+        'Projets'        = @(
+            '2026-014 Chalet du Lac-Boréal', '2026-014 Chalet du Lac-Boréal\Plans', '2026-014 Chalet du Lac-Boréal\Devis', '2026-014 Chalet du Lac-Boréal\Correspondance',
+            '2026-017 Clinique du Littoral', '2026-017 Clinique du Littoral\Plans', '2026-017 Clinique du Littoral\Devis', '2026-017 Clinique du Littoral\Correspondance',
+            '2026-021 Agrandissement Marina Pointe-Blanche', '2026-021 Agrandissement Marina Pointe-Blanche\Plans',
+            '2026-021 Agrandissement Marina Pointe-Blanche\Devis', '2026-021 Agrandissement Marina Pointe-Blanche\Correspondance'
+        )
+        'Administration' = @('Facturation', 'Fournisseurs', 'Modèles')
+        'Direction$'     = @('Budget', 'Contrats')
+        'Archives'       = @('2024', '2025')
+        'Commun'         = @('Procédures', 'Politiques')
+        'Sauvegardes$'   = @()
+        'Logiciels$'     = @('LibreOffice')
+    }
+
     Pannes = @{
         R1 = @{
             Compte              = 'efortin'
             MotDePassePanne     = 'Marina#Direction26'
-            DossierProjet       = '2026-021'
+            # Dossier visé par la couche 3, relatif à C:\AB\Projets (P:\2026-021 dans la spec)
+            DossierProjet       = '2026-021 Agrandissement Marina Pointe-Blanche'
+        }
+        R6 = @{
+            # Relatifs à C:\AB\Administration (T:)
+            Registre = 'Facturation\Registre-factures-2026.ods'
+            Modele   = 'Modèles\Facture-AB.ott'
+            # Variante B : verrou orphelin laissé par le poste de Louis-Philippe
+            VerrouNom   = 'Louis-Philippe Gauthier'
+            VerrouCompte = 'lpgauthier'
+            VerrouPoste = 'AB-PC-02'
         }
     }
 
