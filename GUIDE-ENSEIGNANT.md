@@ -133,6 +133,12 @@ Après la rotation, sur chaque machine :
 Poste **hors tension et débranché** avant toute manipulation. Une seule panne par
 équipe, selon la variante.
 
+**R2 est autonome** : sa variante peut différer de celle des autres requêtes de l'équipe,
+sans aucune conséquence sur les scripts ni la correction (PC-04 n'a pas de script de panne,
+et le Verifier ne dépend pas de la variante). Devant les élèves, la **variante E**
+(écran / câble / affichage) se prépare sans ouvrir le boîtier ni entrer dans l'UEFI :
+pratique pour ne rien dévoiler. Notez la variante R2 retenue pour chaque équipe.
+
 | Variante | Manipulation | Symptôme attendu | Remise en état |
 | --- | --- | --- | --- |
 | A | Débrancher le **câble de données SATA** du disque | « Aucun périphérique amorçable » | Rebrancher le câble de données |
