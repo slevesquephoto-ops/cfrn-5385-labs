@@ -16,3 +16,4 @@
 *.ott  binary
 *.odp  binary
 *.ico  binary
+*.cmd  text eol=crlf

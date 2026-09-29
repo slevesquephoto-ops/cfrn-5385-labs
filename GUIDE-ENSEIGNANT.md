@@ -24,6 +24,28 @@ l'employé **non connecté** (les Setup recréent le profil) :
 powershell -ExecutionPolicy Bypass -File .\AB\<MACHINE>\<Script>-<MACHINE>.ps1
 ```
 
+### Console enseignant (plus simple)
+
+Double-cliquer sur **`Console-AB.cmd`** à la racine du dépôt (ex. `C:\CFRN-LAB(prof)`),
+puis accepter l'UAC. Le menu reconnaît le poste par son nom et lance les mêmes scripts :
+
+| Choix | Action |
+| --- | --- |
+| 1 | Logiciels + verrou Windows (`Set-ABPoste`, installeurs de `tools\installeurs`) |
+| 2 / 3 / 4 | Setup / installer la panne / retirer la panne (séparément) |
+| 5 | **Tout vérifier** : état installé, chaque contrôle (OK, PANNE, ÉCHEC) et verdict |
+| 6 / 7 | Vérifier « Propre » / « Panne » |
+| 8 | PC-02 : vérifier la sauvegarde R3 faite par les élèves |
+| V / R / J | Changer la variante / README du poste / dernier journal |
+
+- La **lettre de l'équipe** est demandée une fois puis mémorisée (option V pour la changer);
+  si une panne est déjà installée, sa lettre est reprise à l'ouverture.
+- PC-01 : le menu demande si R5 (optionnelle) est incluse.
+- PC-04 : les choix 3 et 4 affichent la manipulation et la remise en état de R2 pour la
+  variante (tirées de la section 4 de ce guide).
+- Poste pas encore nommé `AB-...` : le menu propose de le renommer (redémarrage).
+- En cas d'échec, le menu propose d'ouvrir le journal de l'action.
+
 ---
 
 ## 1. Préparation initiale des postes (une seule fois)
