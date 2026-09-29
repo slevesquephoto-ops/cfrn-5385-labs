@@ -25,6 +25,11 @@
 [CmdletBinding()]
 param(
     [ValidateSet('A', 'B', 'C', 'D', 'E')][string[]]$Equipes = @('A', 'B', 'C', 'D', 'E'),
+    # Force le texte de R6 sur cette variante pour toutes les équipes (pour cloner une équipe
+    # à l'identique). Par défaut, chaque équipe prend sa propre lettre.
+    [ValidateSet('A', 'B', 'C', 'D', 'E')][string]$VarianteR6,
+    # Inclut aussi R2 (l'appel de Jérémie). Par défaut R2 n'est pas créée (les élèves la créent).
+    [switch]$AvecR2,
     [switch]$Executer
 )
 
@@ -54,11 +59,14 @@ function Get-PlanEquipe([string]$Equipe) {
             OS = $a.OS; IP = $cfg.Reseau.Machines[$a.Machine]; Lieu = $a.Lieu; Compte = $a.Compte
         }
     }
-    # Requêtes (R1, R3, R4, R5, R6 selon la variante)
-    $requetes = foreach ($code in 'R1', 'R3', 'R4', 'R5', 'R6') {
+    # Requêtes (R1, R3, R4, R5, R6 selon la variante; R2 si -AvecR2)
+    $codes = @('R1', 'R3', 'R4', 'R5', 'R6')
+    if ($AvecR2) { $codes = @('R1', 'R2', 'R3', 'R4', 'R5', 'R6') }
+    $r6variante = $Equipe; if ($VarianteR6) { $r6variante = $VarianteR6 }
+    $requetes = foreach ($code in $codes) {
         $r = $itf.Requetes[$code]
         $sujet = $r.Sujet; $desc = $r.Description
-        if ($code -eq 'R6') { $sujet = $r.Variantes[$Equipe].Sujet; $desc = $r.Variantes[$Equipe].Description }
+        if ($code -eq 'R6') { $sujet = $r.Variantes[$r6variante].Sujet; $desc = $r.Variantes[$r6variante].Description }
         [pscustomobject]@{
             Code = $code; Sujet = $sujet; Details = $desc; Priorite = $r.Priorite
             Contact = $r.Contact; Poste = "AB-$($r.Poste)"
@@ -109,9 +117,12 @@ function Invoke-CreationEquipe($plan) {
 $plans = foreach ($eq in $Equipes) { Get-PlanEquipe -Equipe $eq }
 foreach ($p in $plans) { Show-Plan $p }
 
-$parEquipe = 1 + $itf.Lieux.Count + $cfg.Employes.Count + $itf.Actifs.Count + 5
-Write-Host "`nTotal : $($Equipes.Count) équipe(s) × (1 client + $($itf.Lieux.Count) lieux + $($cfg.Employes.Count) contacts + $($itf.Actifs.Count) actifs + 5 requêtes) = $($parEquipe * $Equipes.Count) objets." -ForegroundColor Yellow
-Write-Host "R2 n'est pas créée (les élèves la créent). Numéros de série et identifiants : à compléter à la main."
+$nbReq = 5; if ($AvecR2) { $nbReq = 6 }
+$parEquipe = 1 + $itf.Lieux.Count + $cfg.Employes.Count + $itf.Actifs.Count + $nbReq
+Write-Host "`nTotal : $($Equipes.Count) équipe(s) × (1 client + $($itf.Lieux.Count) lieux + $($cfg.Employes.Count) contacts + $($itf.Actifs.Count) actifs + $nbReq requêtes) = $($parEquipe * $Equipes.Count) objets." -ForegroundColor Yellow
+if ($VarianteR6) { Write-Host "R6 forcée sur la variante $VarianteR6 pour toutes les équipes (clonage)." }
+if (-not $AvecR2) { Write-Host "R2 n'est pas créée (les élèves la créent)." }
+Write-Host 'Numéros de série et identifiants : à compléter à la main.'
 
 if (-not $Executer) {
     Write-Host "`nAperçu seulement : rien n'a été créé. Pour créer réellement, relancer avec -Executer (équipe par équipe conseillé)." -ForegroundColor Yellow

@@ -36,6 +36,22 @@
     # Requêtes. Contact = compte de l'employé qui appelle; Poste = machine liée.
     # Textes dans la voix de l'employé, sans révéler la cause (règle de discrétion).
     Requetes = @{
+        # R2 : normalement créée par les élèves (appel de Jérémie). Incluse ici pour pouvoir
+        # cloner une équipe complète; New-ITFlowABData ne la crée qu'avec -AvecR2.
+        R2 = @{
+            Poste = 'PC-04'; Contact = 'jbouchard'; Priorite = 'High'
+            Sujet = 'Mon ordinateur ne démarre plus ce matin'
+            Description = @'
+Bonjour,
+
+Ce matin en arrivant, mon poste ne s'affiche pas correctement : l'écran reste noir, ou montre une image toute bleutée, alors que la tour a l'air allumée (les ventilateurs tournent). Je n'arrive pas à voir quoi que ce soit pour ouvrir ma session.
+
+J'ai des rendus à livrer aujourd'hui. Je vous appelle parce que je ne peux même pas utiliser l'ordinateur. Pouvez-vous venir voir?
+
+Jérémie Bouchard
+Technicien en architecture, Architecture Boréale
+'@
+        }
         R1 = @{
             Poste = 'PC-03'; Contact = 'efortin'; Priorite = 'High'
             Sujet = 'Je n''ai plus accès aux plans de la marina'
