@@ -32,6 +32,16 @@ combiné et nettoyage du client. Rapports détaillés dans `tests/logs/` (non su
   prend effet après fermeture puis réouverture de session.
 - **SEC-EICAR-TIERS** : l'exclusion Defender s'ajoute même avec la protection contre les
   falsifications active (constat W10 et W11, commit `eed298a`). Aucune préparation manuelle.
+- **SEC-EICAR-DEF/TIERS — répétition corrigée le 2026-10-16.** La tâche `Optimisation du stockage`
+  était enregistrée avec `-RepetitionInterval 5 min` **sans** `-RepetitionDuration` : PowerShell 5.1
+  l'enregistre (on la voit dans le Planificateur) mais « Prochaine exécution » reste vide et la
+  répétition ne démarre jamais. Constat enseignant : l'alerte Defender n'apparaissait **qu'une fois**
+  (le dépôt initial de l'installateur), jamais ensuite sur la session du client. Ajout de
+  `-RepetitionDuration (New-TimeSpan -Days 365)` (indéfini à l'échelle du labo). Le test automatisé
+  `Test-Particuliers` ne voyait pas le problème : il ne contrôle que présence/retrait via PowerShell
+  Direct, pas le vrai déclenchement dans le temps. **À retester à la main** : installer, ouvrir la
+  session du client, laisser tourner 5-6 min → l'EICAR doit réapparaître et Defender réalerter en
+  boucle (vérifier aussi « Prochaine exécution » non vide dans le Planificateur).
 - Rappel de calibrage (voir SPEC) : viser une difficulté 3+. SYS-SON coupe le *service*
   audio — le panneau Son ne suffit pas, il faut `services.msc`.
 

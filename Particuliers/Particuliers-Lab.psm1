@@ -536,7 +536,9 @@ function Install-PartEicarPersistence {
     (Get-Item -LiteralPath $script:EicarGen -Force).Attributes = 'Hidden'
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$($script:EicarGen)`""
     $t1 = New-ScheduledTaskTrigger -AtLogOn
-    $t2 = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
+    # -RepetitionDuration est OBLIGATOIRE : sans elle, PowerShell 5.1 enregistre la tâche mais la
+    # répétition ne démarre jamais (« Prochaine exécution » vide). 365 jours = indéfini pour le labo.
+    $t2 = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 365)
     $pr = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
     $set = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
     Register-ScheduledTask -TaskName $script:EicarTask -Action $action -Trigger $t1, $t2 -Principal $pr -Settings $set -Force | Out-Null
