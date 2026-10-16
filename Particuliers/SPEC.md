@@ -69,6 +69,26 @@ Portée : **M** = toute la machine, **P** = profil du client. Durées : rapide /
 | PUP-FAUX | « Un message me dit que j'ai plein de virus. » | Faux logiciel « OptimiseurPC Pro » : entrée dans Applications, démarrage automatique, tâche planifiée qui ouvre une page d'alerte locale | P+M | 20 / 30 |
 | SEC-EXCL | (découverte en vérifiant l'antivirus) | Exclusion Microsoft Defender sur `C:\` | M | 10 / 15 — *à valider en VM (protection contre les falsifications)* |
 
+### Simulation d'infection (fichier de test EICAR)
+
+Fichier de test antivirus standard EICAR : inoffensif, reconnu par tous les antivirus,
+redéposé par une tâche planifiée à l'ouverture de session et toutes les 5 minutes.
+Rien de nuisible ne s'exécute. Dans le code, la chaîne n'est jamais écrite en clair : elle
+est reconstruite à partir de codes d'octets à l'exécution, donc aucun fichier du dépôt ni le
+script générateur ne portent la signature (seul le fichier déposé déclenche l'antivirus).
+
+| ID | Ce que dit le client | Cause installée | Portée | Durée |
+| --- | --- | --- | --- | --- |
+| SEC-EICAR-DEF | « Mon antivirus trouve un virus, je le supprime et il revient! » | Tâche planifiée qui redépose EICAR; **Defender reste actif** et le met en quarantaine à chaque fois | M | 20 / 35 |
+| SEC-EICAR-TIERS | « Mon ordinateur agit bizarrement, mais Defender dit que tout va bien. » | Même mécanisme, mais le **dossier de dépôt est exclu de Defender** : l'élève doit installer un autre antivirus | M | 25 / 40 — *exige la protection contre les falsifications désactivée; à valider en VM* |
+
+- Les deux variantes sont incompatibles entre elles (même tâche, même dossier).
+- But pédagogique : comprendre que supprimer le fichier ne suffit pas; trouver et retirer
+  la tâche qui le relance. SEC-EICAR-TIERS pousse en plus à évaluer un antivirus tiers.
+- SEC-EICAR-TIERS ajoute une exclusion Defender (refusée si la protection contre les
+  falsifications est active) : la désactiver à la main sur le poste, comme une préparation
+  manuelle. Le Retrait la remet comme avant.
+
 ### Système et performance
 
 | ID | Ce que dit le client | Cause installée | Portée | Durée |
@@ -101,6 +121,7 @@ Portée : **M** = toute la machine, **P** = profil du client. Durées : rapide /
 ### Incompatibilités
 
 - Une seule panne réseau qui modifie la carte à la fois : RES-DNS, RES-IP et RES-CARTE.
+- SEC-EICAR-DEF et SEC-EICAR-TIERS : jamais ensemble (même tâche, même dossier de dépôt).
 - CPT-ADMIN : seulement pour un client administrateur.
 - CPT-TEMP masque les autres pannes de profil : à donner seule.
 - SYS-SANSECHEC désactive le son, l'impression et le réseau selon le mode. Ne pas la

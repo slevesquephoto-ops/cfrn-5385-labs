@@ -18,7 +18,7 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('Empreinte', 'Comptes', 'Proxy', 'Marque', 'Profils', 'Redemarrer')][string]$Mode,
+    [Parameter(Mandatory)][ValidateSet('Empreinte', 'Comptes', 'Proxy', 'Marque', 'Profils', 'Redemarrer', 'Defender')][string]$Mode,
     [string]$Client = 'mbelanger'
 )
 
@@ -46,6 +46,18 @@ switch ($Mode) {
         & shutdown.exe /r /t 5 /f
         'REDEMARRAGE|ok'
     }
+    'Defender' {
+        try {
+            $s = Get-MpComputerStatus -ErrorAction Stop
+            "DEF|tamper|$($s.IsTamperProtected)"
+            "DEF|realtime|$($s.RealTimeProtectionEnabled)"
+        } catch { "DEF|status|indisponible : $($_.Exception.Message)" }
+        "DEF|tache|$((Test-PartEicarPersistence).Tache)"
+        "DEF|generateur|$((Test-PartEicarPersistence).Generateur)"
+        "DEF|drop|$(Test-Path -LiteralPath (Join-Path $env:ProgramData 'MediaCache\update.bin'))"
+        "DEF|exclusion|$(Test-PartDefenderExclusion)"
+        foreach ($t in @(Get-MpThreat -ErrorAction SilentlyContinue)) { "DEF|threat|$($t.ThreatName)" }
+    }
     'Marque' {
         $f = Join-Path (Get-PartProfilePath -Compte $Client) 'Documents\Notes du technicien.txt'
         $existait = Test-Path -LiteralPath $f
@@ -57,6 +69,8 @@ switch ($Mode) {
         $hostsFile = Join-Path $env:windir 'System32\drivers\etc\hosts'
         if (Test-Path -LiteralPath $hostsFile) { "EMP|hosts|$((Get-FileHash -LiteralPath $hostsFile -Algorithm SHA256).Hash)" } else { 'EMP|hosts|absent' }
         "EMP|parefeu|$([bool](Get-NetFirewallRule -DisplayName 'Microsoft Edge (connexions sortantes)' -ErrorAction SilentlyContinue))"
+        $p = Test-PartEicarPersistence
+        "EMP|eicar|tache|$($p.Tache)|gen|$($p.Generateur)|exclusion|$(Test-PartDefenderExclusion)"
         $k = 'HKLM:\SYSTEM\CurrentControlSet\Services\Audiosrv'
         foreach ($n in 'Start', 'DelayedAutostart') { $s = Get-LabRegistrySnapshot -Path $k -Name $n; "EMP|audiosrv|$n|$($s.Exists)|$($s.Value)" }
         "EMP|audiosrv|etat|$((Get-Service Audiosrv).Status)"

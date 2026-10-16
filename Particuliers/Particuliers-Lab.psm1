@@ -478,4 +478,88 @@ function Get-PartVerification {
     return [pscustomobject]@{ Checks = $checks; Attendues = @($attendues | Sort-Object -Unique) }
 }
 
+# ---------------------------------------------------------------------------
+# EICAR : simulation de virus inoffensive (fichier de test antivirus standard).
+# Rien de nuisible ne s'exécute : on écrit un fichier de test que tout antivirus
+# reconnaît. La « réapparition » est une tâche planifiée (comme SYS-DEMARRAGE).
+# ---------------------------------------------------------------------------
+$script:EicarTask = 'Optimisation du stockage'
+$script:EicarGen = Join-Path $env:ProgramData 'Microsoft\DeviceSync\sync-store.ps1'
+$script:EicarDrop = Join-Path $env:ProgramData 'MediaCache\update.bin'
+
+function Get-PartEicarByte {
+    <#
+    Octets du fichier de test EICAR, assemblés par morceaux : aucun fichier source (ni le
+    script générateur déposé) ne contient la chaîne complète, et rien n'est reconstitué
+    comme un script (AMSI n'a rien à signaler). Seul le fichier écrit déclenche l'antivirus.
+    #>
+    $parts = @('X5O!P%@AP[4\PZX54(P', '^)7CC)7}', '$EICAR', '-STANDARD-ANTIVIRUS-', 'TEST-FILE!$H+H*')
+    $bytes = New-Object System.Collections.Generic.List[byte]
+    foreach ($p in $parts) { $bytes.AddRange([Text.Encoding]::ASCII.GetBytes($p)) }
+    return $bytes.ToArray()
+}
+
+function Get-PartEicarDropFolder { return (Split-Path -Parent $script:EicarDrop) }
+
+function Write-PartEicarFile {
+    $dir = Get-PartEicarDropFolder
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    [IO.File]::WriteAllBytes($script:EicarDrop, (Get-PartEicarByte))
+}
+
+function Install-PartEicarPersistence {
+    <# Dépose le générateur et une tâche planifiée (ouverture de session + toutes les 5 min, SYSTEM). #>
+    $codes = (Get-PartEicarByte | ForEach-Object { [int]$_ }) -join ','
+    $gen = @(
+        '$p = ''' + $script:EicarDrop + '''',
+        '$d = Split-Path -Parent $p',
+        'if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }',
+        '[IO.File]::WriteAllBytes($p, [byte[]]@(' + $codes + '))'
+    )
+    $dir = Split-Path -Parent $script:EicarGen
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    Set-Content -LiteralPath $script:EicarGen -Value $gen -Encoding ASCII
+    (Get-Item -LiteralPath $script:EicarGen -Force).Attributes = 'Hidden'
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$($script:EicarGen)`""
+    $t1 = New-ScheduledTaskTrigger -AtLogOn
+    $t2 = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5)
+    $pr = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+    $set = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+    Register-ScheduledTask -TaskName $script:EicarTask -Action $action -Trigger $t1, $t2 -Principal $pr -Settings $set -Force | Out-Null
+}
+
+function Remove-PartEicarPersistence {
+    <# Retire la tâche, le générateur et le dossier de dépôt (nettoyage exact). #>
+    Unregister-ScheduledTask -TaskName $script:EicarTask -Confirm:$false -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $script:EicarGen) { Remove-Item -LiteralPath $script:EicarGen -Force }
+    $gdir = Split-Path -Parent $script:EicarGen
+    if ((Test-Path -LiteralPath $gdir) -and -not @(Get-ChildItem -LiteralPath $gdir -Force)) { Remove-Item -LiteralPath $gdir -Force }
+    if (Test-Path -LiteralPath $script:EicarDrop) { Remove-Item -LiteralPath $script:EicarDrop -Force -ErrorAction SilentlyContinue }
+    $ddir = Get-PartEicarDropFolder
+    if ((Test-Path -LiteralPath $ddir) -and -not @(Get-ChildItem -LiteralPath $ddir -Force)) { Remove-Item -LiteralPath $ddir -Force }
+}
+
+function Test-PartEicarPersistence {
+    <# { Tache; Generateur } : vrai si le mécanisme de réapparition est en place. #>
+    return [pscustomobject]@{
+        Tache      = [bool](Get-ScheduledTask -TaskName $script:EicarTask -ErrorAction SilentlyContinue)
+        Generateur = (Test-Path -LiteralPath $script:EicarGen)
+    }
+}
+
+function Test-PartDefenderExclusion {
+    <# Vrai si le dossier de dépôt est exclu de Microsoft Defender. #>
+    try { return (@((Get-MpPreference -ErrorAction Stop).ExclusionPath) -contains (Get-PartEicarDropFolder)) }
+    catch { return $false }
+}
+
+function Add-PartDefenderExclusion {
+    try { Add-MpPreference -ExclusionPath (Get-PartEicarDropFolder) -ErrorAction Stop }
+    catch { throw "Impossible d'ajouter l'exclusion Defender (protection contre les falsifications active?). La désactiver sur le poste, puis réessayer. Détail : $($_.Exception.Message)" }
+}
+
+function Remove-PartDefenderExclusion {
+    Remove-MpPreference -ExclusionPath (Get-PartEicarDropFolder) -ErrorAction SilentlyContinue
+}
+
 Export-ModuleMember -Function *

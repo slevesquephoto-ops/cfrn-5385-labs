@@ -75,5 +75,19 @@
             Correction = 'Pare-feu Windows Defender > Règles de trafic sortant : trouver et supprimer la règle qui bloque Edge.'
             Incompatibles = @()
         }
+        @{
+            Id = 'SEC-EICAR-DEF'; Titre = 'Fausse infection (Defender actif)'; Portee = 'Machine'; Duree = '20 / 35'; Difficulte = 4
+            Recit = 'Mon antivirus arrête pas de me dire qu''il a trouvé un virus, je le supprime et il revient!'
+            Cause = 'Fichier de test EICAR (inoffensif) redéposé par une tâche planifiée à l''ouverture de session et toutes les 5 min; Microsoft Defender le met en quarantaine à chaque fois.'
+            Correction = 'Reconnaître que Defender fait son travail, trouver la tâche planifiée qui relance le dépôt (Planificateur de tâches / Autoruns), la supprimer avec son script, puis vider la quarantaine.'
+            Incompatibles = @('SEC-EICAR-TIERS')
+        }
+        @{
+            Id = 'SEC-EICAR-TIERS'; Titre = 'Fausse infection (dossier exclu de Defender)'; Portee = 'Machine'; Duree = '25 / 40'; Difficulte = 5
+            Recit = 'Mon ordinateur agit bizarrement, mais Windows Defender dit que tout va bien.'
+            Cause = 'Même fichier de test EICAR et même tâche de réapparition, mais le dossier de dépôt est exclu de Defender : il ne voit rien.'
+            Correction = 'Installer et lancer un autre antivirus (ex. Malwarebytes) pour détecter le fichier, retirer l''exclusion dans Defender, puis supprimer la tâche et son script. (Exige la protection contre les falsifications désactivée pour l''installation.)'
+            Incompatibles = @('SEC-EICAR-DEF')
+        }
     )
 }
