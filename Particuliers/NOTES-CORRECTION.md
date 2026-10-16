@@ -15,6 +15,8 @@ combiné et nettoyage du client. Rapports détaillés dans `tests/logs/` (non su
 | SEC-EICAR-DEF, SEC-EICAR-TIERS | OK | OK | 2026-10-13 |
 | STRAT-BUREAU, STRAT-PANNEAU, STRAT-ARRET, STRAT-CMD | OK | OK | 2026-10-14 |
 | SYS-IMPRIM, SYS-SANSECHEC, SYS-HEURE, SYS-DISQUE, SYS-DEMARRAGE | à tester | à tester | — |
+| SYS-USB, SYS-RAM, SYS-REDEMARRAGE, SEC-BOUCLE, STRAT-RUN, STRAT-TASKMGR | à tester | à tester | — |
+| RES-DUPLEX | s.o. (vrai matériel) | s.o. (vrai matériel) | — |
 
 ## Points d'attention
 
@@ -43,3 +45,32 @@ combiné et nettoyage du client. Rapports détaillés dans `tests/logs/` (non su
 - **SYS-DEMARRAGE** : portée Machine (la clé Run HLKM et la tâche `MediaLibraryIndexer` sont
   communes au poste). Charges inoffensives (`Start-Sleep`). Trois emplacements à trouver :
   Run profil (HKCU), Run machine (HKLM), tâche planifiée — Autoruns les montre d'un coup.
+
+## Lot « idées enseignant » (à tester en VM, sauf RES-DUPLEX)
+
+- **Pannes punitives (SEC-BOUCLE, SYS-REDEMARRAGE)** : déclenchées à l'ouverture de session
+  **du client seulement** (clé Run du profil / tâche `AtLogOn -User <client>`). Conséquence
+  voulue : la session du client devient inutilisable, et l'élève doit réparer **depuis un autre
+  compte ou Windows RE**. Un autre compte admin reste toujours propre (lesson recoverable).
+  Comme le test automatisé passe par PowerShell Direct (aucun logon interactif), ces pannes
+  **ne se déclenchent pas** pendant `Test-Particuliers` : le test ne vérifie que présence/retrait.
+  Le vrai comportement punitif se teste à la main en ouvrant une session du client.
+  - SYS-REDEMARRAGE : `shutdown /r /t 30`; le retrait fait aussi `shutdown /a`.
+  - SEC-BOUCLE : lance `notepad.exe` en boucle (la calculatrice moderne est une app UWP
+    **mono-instance** et ne se multiplierait pas). Changer `$appli`/`$intervalle` dans le script
+    pour ajuster l'agressivité. Le retrait tue la boucle et les fenêtres ouvertes.
+- **SYS-RAM** : `truncatememory` (bcdedit), test de config sans redémarrer. Plancher **3072 Mo** :
+  en dessous, Windows 11 peut refuser de démarrer (et un boot raté en VM couperait PowerShell Direct).
+- **SYS-USB** : `USBSTOR\Start = 4`. N'affecte pas les clés déjà énumérées par une session en cours;
+  effet net au rebranchement. Clavier/souris HID intacts.
+- **STRAT-RUN / STRAT-TASKMGR** : mêmes patrons que les STRAT déjà validées.
+- **RES-DUPLEX** : **vrai matériel seulement**. La carte virtuelle Hyper-V n'expose pas la propriété
+  `*SpeedDuplex` : la panne refuse alors proprement (ne pas l'inclure dans un run VM). Sur le poste,
+  vérifier les libellés exacts des valeurs (« 10 Mbps Half Duplex », « Auto Negotiation ») : ils
+  varient selon le pilote.
+
+## Idée en attente
+
+- **ACC-ENVERS** (prank « tout à l'envers » : rotation 180° + souris inversée + capture en fond
+  d'écran) : à faire; exige la session interactive du client (tâche au logon) et de l'affichage,
+  donc vrai matériel seulement. Non commencée.

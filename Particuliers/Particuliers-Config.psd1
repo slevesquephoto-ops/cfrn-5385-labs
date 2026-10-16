@@ -76,6 +76,13 @@
             Incompatibles = @()
         }
         @{
+            Id = 'RES-DUPLEX'; Titre = 'Carte réseau en 10 Mbps half-duplex'; Portee = 'Machine'; Duree = '15 / 25'; Difficulte = 4
+            Recit = 'Internet est devenu extrêmement lent, les pages mettent une éternité à charger, mais je suis bien connectée.'
+            Cause = 'Propriété Vitesse/Duplex de la carte forcée à « 10 Mbps Half Duplex » au lieu de l''auto-négociation.'
+            Correction = 'Gestionnaire de périphériques > carte réseau > Avancé > Vitesse et duplex : « Négociation automatique ». VRAI MATÉRIEL seulement (carte virtuelle Hyper-V sans cette propriété).'
+            Incompatibles = @()
+        }
+        @{
             Id = 'SEC-EICAR-DEF'; Titre = 'Fausse infection (Defender actif)'; Portee = 'Machine'; Duree = '20 / 35'; Difficulte = 4
             Recit = 'Mon antivirus arrête pas de me dire qu''il a trouvé un virus, je le supprime et il revient!'
             Cause = 'Fichier de test EICAR (inoffensif) redéposé par une tâche planifiée à l''ouverture de session et toutes les 5 min; Microsoft Defender le met en quarantaine à chaque fois.'
@@ -88,6 +95,13 @@
             Cause = 'Même fichier de test EICAR et même tâche de réapparition, mais le dossier de dépôt est exclu de Defender : il ne voit rien.'
             Correction = 'Installer et lancer un autre antivirus (ex. Malwarebytes) pour détecter le fichier, retirer l''exclusion dans Defender, puis supprimer la tâche et son script. (Exige la protection contre les falsifications désactivée pour l''installation.)'
             Incompatibles = @('SEC-EICAR-DEF')
+        }
+        @{
+            Id = 'SEC-BOUCLE'; Titre = 'Faux malware : lanceur en boucle au démarrage'; Portee = 'Profil'; Duree = '20 / 30'; Difficulte = 3
+            Recit = 'Quand j''ouvre ma session, des fenêtres s''ouvrent sans arrêt et l''ordinateur devient inutilisable. Un « nettoyeur » que j''ai téléchargé l''aurait fait.'
+            Cause = 'Clé Run du profil qui lance au logon un script caché bouclant sur une application (remplit la mémoire). Punitif : ne se déclenche qu''à l''ouverture de session du client.'
+            Correction = 'Se connecter avec un AUTRE compte (ou Windows RE), retirer la clé Run et le script caché, puis fermer les fenêtres ouvertes. La session du client redevient utilisable.'
+            Incompatibles = @()
         }
 
         # --- Système et performance ---
@@ -126,6 +140,27 @@
             Correction = 'Gestionnaire des tâches > Démarrage (clés Run) + Planificateur de tâches (tâche MediaLibraryIndexer). Autoruns montre les trois d''un coup. Désactiver puis supprimer chaque élément.'
             Incompatibles = @()
         }
+        @{
+            Id = 'SYS-USB'; Titre = 'Clés USB bloquées'; Portee = 'Machine'; Duree = '10 / 15'; Difficulte = 3
+            Recit = 'Ma clé USB n''est plus reconnue sur cet ordinateur, mais mon clavier et ma souris USB fonctionnent.'
+            Cause = 'Service de stockage de masse USB désactivé (USBSTOR Start = 4). Les périphériques HID (clavier, souris) ne sont pas touchés.'
+            Correction = 'Remettre HKLM\SYSTEM\CurrentControlSet\Services\USBSTOR\Start = 3, rebrancher la clé. (Stratégies d''accès aux disques amovibles aussi à vérifier si présentes.)'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'SYS-RAM'; Titre = 'Mémoire maximale bridée'; Portee = 'Machine'; Duree = '15 / 20'; Difficulte = 4
+            Recit = 'Mon ordinateur rame, le Gestionnaire des tâches ne montre que 3 Go de mémoire alors que j''en ai 16.'
+            Cause = 'Mémoire maximale bridée au démarrage (bcdedit truncatememory, ce que coche msconfig > Démarrer > Options avancées > Mémoire maximale).'
+            Correction = 'msconfig > Démarrer > Options avancées : décocher « Mémoire maximale », ou bcdedit /deletevalue {current} truncatememory, puis redémarrer.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'SYS-REDEMARRAGE'; Titre = 'Redémarrage forcé au logon (punitif)'; Portee = 'Machine'; Duree = '15 / 25'; Difficulte = 4
+            Recit = 'Dès que j''ouvre ma session, l''ordinateur redémarre tout seul au bout de quelques secondes. Impossible de travailler.'
+            Cause = 'Tâche planifiée déclenchée à l''ouverture de session DU CLIENT qui lance shutdown /r (reste d''un script de mise à jour mal effacé).'
+            Correction = 'Se connecter avec un AUTRE compte, ou démarrer dans Windows RE, pour désactiver et supprimer la tâche (Planificateur de tâches). shutdown /a annule le redémarrage déjà armé.'
+            Incompatibles = @()
+        }
 
         # --- Restrictions par stratégie (restes d'un faux « optimiseur » ou « contrôle parental ») ---
         # Portée Profil : valeurs de stratégie dans la ruche du client. La correction passe par
@@ -156,6 +191,20 @@
             Recit = 'Mon petit-fils veut m''aider à distance mais l''invite de commandes ne s''ouvre plus : « L''invite de commandes a été désactivée par votre administrateur ».'
             Cause = 'Stratégie DisableCMD = 2 (HKCU\Software\Policies\Microsoft\Windows\System) : cmd.exe interactif bloqué, scripts encore permis.'
             Correction = 'gpedit.msc > Configuration utilisateur > Modèles d''administration > Système > « Empêcher l''accès à l''invite de commandes » : Non configuré. Ou supprimer la valeur DisableCMD dans le registre. (Le diagnostic se fait par PowerShell, non visé par cette stratégie.)'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'STRAT-RUN'; Titre = 'Commande Exécuter bloquée (stratégie)'; Portee = 'Profil'; Duree = '10 / 15'; Difficulte = 2
+            Recit = 'Mon raccourci Windows + R n''ouvre plus la petite fenêtre « Exécuter ».'
+            Cause = 'Stratégie NoRun = 1 (HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer).'
+            Correction = 'gpedit.msc > Configuration utilisateur > Modèles d''administration > Menu Démarrer et barre des tâches > « Supprimer le menu Exécuter... » : Non configuré. Ou supprimer la valeur NoRun dans le registre.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'STRAT-TASKMGR'; Titre = 'Gestionnaire des tâches bloqué (stratégie)'; Portee = 'Profil'; Duree = '10 / 15'; Difficulte = 2
+            Recit = 'Quand j''essaie d''ouvrir le Gestionnaire des tâches, un message dit qu''il a été désactivé par mon administrateur.'
+            Cause = 'Stratégie DisableTaskMgr = 1 (HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\System).'
+            Correction = 'gpedit.msc > Configuration utilisateur > Modèles d''administration > Système > Options Ctrl+Alt+Suppr > « Supprimer le Gestionnaire des tâches » : Non configuré. Ou supprimer la valeur DisableTaskMgr dans le registre.'
             Incompatibles = @()
         }
     )

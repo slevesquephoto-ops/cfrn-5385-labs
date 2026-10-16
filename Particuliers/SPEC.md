@@ -66,6 +66,7 @@ SYS-SON coupe le **service** audio — le panneau Son ne suffit pas, il faut `se
 | RES-CARTE | « Plus d'Internet du tout, il y a un globe barré. » | Carte réseau désactivée | M | 5 / 10 |
 | RES-IP | « Internet limité » | Adresse IP statique dans le mauvais sous-réseau | M | 10 / 15 |
 | RES-PAREFEU | « Edge dit que je n'ai pas Internet, mais les mises à jour passent. » | Règle sortante du pare-feu qui bloque `msedge.exe`, au nom d'apparence normale | M | 15 / 25 |
+| RES-DUPLEX | « Internet est devenu extrêmement lent, mais je suis connectée. » | Carte réseau forcée en 10 Mbps half-duplex au lieu de l'auto-négociation | M | 15 / 25 — *vrai matériel seulement (carte virtuelle Hyper-V sans cette propriété)* |
 
 ### Navigateur et logiciels indésirables
 
@@ -74,6 +75,7 @@ SYS-SON coupe le **service** audio — le panneau Son ne suffit pas, il faut `se
 | NAV-PIRATE | « Ma page d'accueil a changé et mes recherches ne marchent plus. » | Stratégies Edge : page d'accueil vers une fausse page locale « Recherche Express », moteur de recherche `recherche-express.example` (« Géré par votre organisation ») | M | 15 / 25 |
 | PUP-FAUX | « Un message me dit que j'ai plein de virus. » | Faux logiciel « OptimiseurPC Pro » : entrée dans Applications, démarrage automatique, tâche planifiée qui ouvre une page d'alerte locale | P+M | 20 / 30 |
 | SEC-EXCL | (découverte en vérifiant l'antivirus) | Exclusion Microsoft Defender sur `C:\` | M | 10 / 15 — *à valider en VM (protection contre les falsifications)* |
+| SEC-BOUCLE | « Des fenêtres s'ouvrent sans arrêt à l'ouverture de ma session. » | Faux « nettoyeur » : clé Run du profil qui lance au logon un script caché bouclant sur une appli (sature la session). Punitif, déclenché au logon du client seulement | P | 20 / 30 |
 
 ### Simulation d'infection (fichier de test EICAR)
 
@@ -105,6 +107,9 @@ script générateur ne portent la signature (seul le fichier déposé déclenche
 | SYS-HEURE | « Aucun site sécurisé ne fonctionne, il parle de mon horloge. » | Date décalée et synchronisation de l'heure désactivée (simule la pile CMOS) | M | 15 / 20 |
 | SYS-SON | « Je n'ai plus de son. » | Service Audio Windows désactivé | M | 10 / 15 |
 | SYS-IMPRIM | « Je ne peux plus imprimer. » | Spouleur d'impression désactivé | M | 10 / 15 |
+| SYS-USB | « Ma clé USB n'est pas reconnue, mais mon clavier USB marche. » | Stockage de masse USB désactivé (service `USBSTOR` Start = 4); HID intacts | M | 10 / 15 |
+| SYS-RAM | « Mon PC rame, je ne vois que 3 Go sur 16. » | Mémoire maximale bridée au démarrage (`bcdedit truncatememory`, comme msconfig); plancher 3072 Mo | M | 15 / 20 |
+| SYS-REDEMARRAGE | « Mon PC redémarre tout seul peu après l'ouverture de session. » | Tâche déclenchée au logon **du client** qui lance `shutdown /r`. Punitif : réparer depuis un autre compte ou Windows RE | M | 15 / 25 |
 
 ### Compte et fichiers
 
@@ -128,6 +133,8 @@ Restes d'un faux « optimiseur » ou « contrôle parental » installé par le c
 | STRAT-PANNEAU | « Le Panneau de configuration est bloqué par mon administrateur. » | `NoControlPanel = 1` (Policies\Explorer) : bloque Panneau de configuration **et** Paramètres | P | 10 / 15 |
 | STRAT-ARRET | « Je ne trouve plus comment éteindre l'ordinateur. » | `NoClose = 1` (Policies\Explorer) : retire Arrêter / Redémarrer du menu Démarrer | P | 10 / 15 |
 | STRAT-CMD | « L'invite de commandes ne s'ouvre plus. » | `DisableCMD = 2` (Policies\Microsoft\Windows\System) : cmd bloqué, scripts permis | P | 10 / 15 |
+| STRAT-RUN | « Windows + R n'ouvre plus la fenêtre Exécuter. » | `NoRun = 1` (Policies\Explorer) | P | 10 / 15 |
+| STRAT-TASKMGR | « Le Gestionnaire des tâches a été désactivé par l'administrateur. » | `DisableTaskMgr = 1` (Policies\System) | P | 10 / 15 |
 
 ### Accessibilité et périphériques (rapides, pour réchauffer)
 
