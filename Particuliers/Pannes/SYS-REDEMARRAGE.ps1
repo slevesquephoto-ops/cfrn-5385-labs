@@ -27,7 +27,10 @@ $blocs = @{
         param($Ctx, $Etat)
         $null = $Ctx, $Etat
         Unregister-ScheduledTask -TaskName $tache -Confirm:$false -ErrorAction SilentlyContinue
-        & shutdown.exe /a 2>$null | Out-Null   # annule un redémarrage déjà armé (sans effet si aucun)
+        # Annule un redémarrage éventuellement armé. On passe par cmd pour avaler le flux d'erreur de
+        # shutdown quand aucun arrêt n'est en cours : sinon PowerShell 5.1 promeut ce stderr en
+        # NativeCommandError et le moteur croit (à tort) que le retrait a échoué.
+        & cmd.exe /c 'shutdown /a >nul 2>nul'
     }
     Tester = {
         param($Ctx)

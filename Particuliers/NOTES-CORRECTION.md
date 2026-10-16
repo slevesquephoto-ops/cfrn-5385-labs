@@ -14,12 +14,14 @@ combiné et nettoyage du client. Rapports détaillés dans `tests/logs/` (non su
 | ACC-SOURIS, RES-PROXY, SYS-SON, RES-DNS, RES-HOSTS, RES-CARTE, RES-IP, RES-PAREFEU | OK | OK | 2026-10-13 |
 | SEC-EICAR-DEF, SEC-EICAR-TIERS | OK | OK | 2026-10-13 |
 | STRAT-BUREAU, STRAT-PANNEAU, STRAT-ARRET, STRAT-CMD | OK | OK | 2026-10-14 |
-| SYS-IMPRIM, SYS-SANSECHEC, SYS-HEURE, SYS-DISQUE, SYS-DEMARRAGE | à tester | à tester | — |
-| SYS-USB, SYS-RAM, SYS-REDEMARRAGE, SEC-BOUCLE, STRAT-RUN, STRAT-TASKMGR | à tester | à tester | — |
+| SYS-SANSECHEC, SYS-DISQUE, SYS-RAM | OK | OK | 2026-10-16 |
+| SYS-REDEMARRAGE | installe OK ; **retrait corrigé** → à retester | à retester | 2026-10-16 |
+| SYS-DEMARRAGE | **renforcée** (voir note) → à retester | à retester | 2026-10-16 |
+| SYS-IMPRIM, SYS-HEURE, SYS-USB, SEC-BOUCLE, STRAT-RUN, STRAT-TASKMGR | à tester | à tester | — |
 | ACC-CLAVIER, ACC-FILTRES | à tester | à tester | — |
 | CPT-MDP, CPT-ADMIN, FIC-CACHES, FIC-REDIR | à tester | à tester | — |
 | NAV-PIRATE, PUP-FAUX, SEC-EXCL | à tester | à tester | — |
-| RES-DUPLEX | s.o. (vrai matériel) | s.o. (vrai matériel) | — |
+| RES-DUPLEX | s.o. (vrai matériel) — refus propre en VM constaté 2026-10-16 | s.o. (vrai matériel) | — |
 | CPT-TEMP (à donner SEULE) | à tester | à tester | — |
 
 ## Points d'attention
@@ -46,9 +48,24 @@ combiné et nettoyage du client. Rapports détaillés dans `tests/logs/` (non su
   donc l'écart d'horloge ne coupe pas la session de test.
 - **SYS-SANSECHEC** désactive son, impression et réseau selon le mode : déclarée incompatible
   avec SYS-SON, SYS-IMPRIM et toutes les pannes réseau.
-- **SYS-DEMARRAGE** : portée Machine (la clé Run HLKM et la tâche `MediaLibraryIndexer` sont
-  communes au poste). Charges inoffensives (`Start-Sleep`). Trois emplacements à trouver :
-  Run profil (HKCU), Run machine (HKLM), tâche planifiée — Autoruns les montre d'un coup.
+- **SYS-DEMARRAGE** (renforcée le 2026-10-16) : la première version (petits `Start-Sleep`) ne se
+  faisait pas sentir (constat enseignant en VM). Désormais **quatre** emplacements à trouver, répartis
+  entre outils différents pour que l'élève travaille > 2 min :
+  - clé Run du **profil** (HKCU), **deux** valeurs (`MediaAgent` → `agent.vbs`, `UpdateNotifier`) ;
+  - clé Run de la **machine** (HKLM, `CloudSyncHelper`) qui lance `%ProgramData%\MediaAgent\sync-agent.ps1`,
+    une **charge CPU bornée (~75 s)** : la session reste utilisable mais nettement poussive au démarrage ;
+  - le **dossier Démarrage** du profil (`...\Startup\SyncCheck.vbs`) — invisible dans le Planificateur ;
+  - la tâche planifiée `MediaLibraryIndexer` au logon (attente 45 s, effet « indexation »).
+  Le Gestionnaire des tâches > Démarrage montre les Run + le dossier Démarrage mais **pas** la tâche ;
+  il faut aussi le Planificateur. Autoruns regroupe tout. Toutes les charges se terminent seules et le
+  retrait supprime chaque valeur, fichier et dossier créés (retrait exact). Portée Machine pour HKLM +
+  tâche ; les éléments HKCU et les fichiers du profil sont propres au client.
+- **SYS-REDEMARRAGE** (retrait corrigé le 2026-10-16) : le retrait supprime d'abord la tâche, puis
+  annule un éventuel redémarrage armé. L'appel `shutdown /a` passait par `& shutdown.exe /a 2>$null`,
+  dont la redirection de stderr est promue en *NativeCommandError* par PowerShell 5.1 quand aucun arrêt
+  n'est en cours → le moteur croyait le retrait échoué (« le système n'est pas en cours d'arrêt »). La
+  tâche était pourtant déjà retirée. Corrigé en passant par `cmd /c 'shutdown /a >nul 2>nul'` (cmd avale
+  le flux, PowerShell ne voit aucune erreur).
 
 ## Lot « idées enseignant » (à tester en VM, sauf RES-DUPLEX)
 

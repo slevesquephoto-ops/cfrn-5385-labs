@@ -210,8 +210,8 @@
         @{
             Id = 'SYS-DEMARRAGE'; Titre = 'Démarrage lent (éléments inutiles)'; Portee = 'Machine'; Duree = '15 / 20'; Difficulte = 4
             Recit = 'Mon ordinateur est devenu très lent à démarrer et à ouvrir ma session.'
-            Cause = 'Éléments de démarrage inutiles mais inoffensifs à trois endroits : clé Run du profil (HKCU), clé Run de la machine (HKLM) et tâche planifiée à l''ouverture de session.'
-            Correction = 'Gestionnaire des tâches > Démarrage (clés Run) + Planificateur de tâches (tâche MediaLibraryIndexer). Autoruns montre les trois d''un coup. Désactiver puis supprimer chaque élément.'
+            Cause = 'Plusieurs éléments de démarrage inutiles mais inoffensifs, répartis à quatre endroits : clé Run du profil (HKCU, deux valeurs), clé Run de la machine (HKLM, qui lance une charge CPU bornée rendant la session poussive), le dossier Démarrage du profil, et une tâche planifiée à l''ouverture de session.'
+            Correction = 'Gestionnaire des tâches > Démarrage (clés Run + dossier Démarrage) ET Planificateur de tâches (tâche MediaLibraryIndexer) : aucun outil seul ne montre tout. Autoruns les regroupe. Désactiver puis supprimer chaque élément, et vider le dossier Démarrage du profil.'
             Incompatibles = @()
         }
         @{

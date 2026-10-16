@@ -94,6 +94,7 @@ switch ($Mode) {
         "EMP|fichier|rechercheexpress|$(Test-Path -LiteralPath (Join-Path $env:ProgramData 'RechercheExpress\recherche-express.html'))"
         "EMP|fichier|optimiseur|$(Test-Path -LiteralPath (Join-Path $env:ProgramData 'OptimiseurPCPro\alerte.html'))"
         "EMP|defender|exclC|$(try { @((Get-MpPreference -ErrorAction Stop).ExclusionPath) -contains 'C:\' } catch { 'na' })"
+        "EMP|fichier|syncagent|$(Test-Path -LiteralPath (Join-Path $env:ProgramData 'MediaAgent\sync-agent.ps1'))"
         $is = 'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
         $vals = @(
             @($is, 'ProxyEnable'), @($is, 'ProxyServer'), @($is, 'ProxyOverride'),
@@ -106,6 +107,7 @@ switch ($Mode) {
             @('Software\Microsoft\Windows\CurrentVersion\Policies\Explorer', 'NoRun'),
             @('Software\Microsoft\Windows\CurrentVersion\Policies\System', 'DisableTaskMgr'),
             @('Software\Microsoft\Windows\CurrentVersion\Run', 'MediaAgent'),
+            @('Software\Microsoft\Windows\CurrentVersion\Run', 'UpdateNotifier'),
             @('Software\Microsoft\Windows\CurrentVersion\Run', 'MediaTools'),
             @('Software\Microsoft\Windows\CurrentVersion\Run', 'OptimiseurPC Pro'),
             @('Keyboard Layout\Preload', '1'), @('Keyboard Layout\Preload', '2'),
@@ -131,6 +133,7 @@ switch ($Mode) {
             if ($prof) {
                 "EMP|fichier|cache|$(Test-Path -LiteralPath (Join-Path $prof 'AppData\Local\Temp\MediaCache\cache.dat'))"
                 "EMP|fichier|agent|$(Test-Path -LiteralPath (Join-Path $prof 'AppData\Local\MediaAgent\agent.vbs'))"
+                "EMP|fichier|startup|$(Test-Path -LiteralPath (Join-Path $prof 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\SyncCheck.vbs'))"
                 "EMP|fichier|boucle|$(Test-Path -LiteralPath (Join-Path $prof 'AppData\Local\MediaTools\run.ps1'))"
                 foreach ($c in 'Documents', 'Pictures', 'Desktop', 'Downloads') {
                     $pp = Join-Path $prof $c
