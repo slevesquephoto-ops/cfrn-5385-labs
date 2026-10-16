@@ -130,11 +130,23 @@ foreach ($vm in $VMs) {
     }
 
     Write-Host '--- Pannes superposées' -ForegroundColor Cyan
+    # Sous-ensemble de pannes compatibles entre elles (le moteur refuse les incompatibles)
+    $pile = @()
+    foreach ($id in $Pannes) {
+        $def = $Cfg.Pannes | Where-Object { $_.Id -eq $id }
+        $conflit = $false
+        foreach ($dejaId in $pile) {
+            $d2 = $Cfg.Pannes | Where-Object { $_.Id -eq $dejaId }
+            if (($def.Incompatibles -contains $dejaId) -or ($d2.Incompatibles -contains $id)) { $conflit = $true }
+        }
+        if (-not $conflit) { $pile += $id }
+    }
+    Write-Host "    pile : $($pile -join ', ')"
     $e1 = Invoke-Sonde $vm 'pile-1-emp' 'Empreinte' 'EMP'
     $ok = $true
-    foreach ($id in $Pannes) { $r = Invoke-Client $vm "pile-2-$id" @('-Panne', $id); $ok = $ok -and ($r.Code -eq 0) }
+    foreach ($id in $pile) { $r = Invoke-Client $vm "pile-2-$id" @('-Panne', $id); $ok = $ok -and ($r.Code -eq 0) }
     $g['Pile : installation'] = Mark $ok
-    $g['Pile : Verifier'] = Test-Verif $vm 'pile-3-verif' $Pannes
+    $g['Pile : Verifier'] = Test-Verif $vm 'pile-3-verif' $pile
     $r = Invoke-Client $vm 'pile-4-tout' @('-Retirer', '-Tout')
     $e2 = Invoke-Sonde $vm 'pile-5-emp' 'Empreinte' 'EMP'
     $g['Pile : Retirer -Tout'] = Mark ($r.Code -eq 0 -and (Test-Same $e1 $e2 "$vm-pile-empreinte"))

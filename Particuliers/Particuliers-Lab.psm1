@@ -73,6 +73,31 @@ function Test-PartABPanne {
 }
 
 # ---------------------------------------------------------------------------
+# Réseau : utilisé par les pannes RES-* (cartes de la connexion Internet, chemin d'Edge)
+# ---------------------------------------------------------------------------
+function Get-PartNetAdapter {
+    <#
+    Cartes qui portent la connexion Internet (passerelle IPv4 par défaut), sinon toutes les
+    cartes matérielles « Up ». Objets { Index; Nom; Guid }. En VM, une seule carte.
+    #>
+    $idx = @(Get-NetIPConfiguration -ErrorAction SilentlyContinue | Where-Object { $_.IPv4DefaultGateway } | ForEach-Object { $_.InterfaceIndex })
+    $cartes = @(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.HardwareInterface })
+    if (-not $idx) { $idx = @($cartes | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { $_.ifIndex }) }
+    return @($cartes | Where-Object { $idx -contains $_.ifIndex } |
+            ForEach-Object { [pscustomobject]@{ Index = $_.ifIndex; Nom = $_.Name; Guid = $_.InterfaceGuid } })
+}
+
+function Get-PartEdgePath {
+    <# Chemin de msedge.exe, ou $null si Edge est absent. #>
+    foreach ($r in ${env:ProgramFiles(x86)}, $env:ProgramFiles) {
+        if (-not $r) { continue }
+        $p = Join-Path $r 'Microsoft\Edge\Application\msedge.exe'
+        if (Test-Path -LiteralPath $p) { return $p }
+    }
+    return $null
+}
+
+# ---------------------------------------------------------------------------
 # Registre de la ruche du client : chemins RELATIFS (la racine change selon que la
 # ruche est montée par le script ou déjà chargée par une session ouverte)
 # ---------------------------------------------------------------------------

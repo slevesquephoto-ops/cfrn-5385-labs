@@ -54,6 +54,9 @@ switch ($Mode) {
     }
     'Empreinte' {
         foreach ($u in Get-LocalUser) { "EMP|compte|$($u.Name)|$($u.Enabled)" }
+        $hostsFile = Join-Path $env:windir 'System32\drivers\etc\hosts'
+        if (Test-Path -LiteralPath $hostsFile) { "EMP|hosts|$((Get-FileHash -LiteralPath $hostsFile -Algorithm SHA256).Hash)" } else { 'EMP|hosts|absent' }
+        "EMP|parefeu|$([bool](Get-NetFirewallRule -DisplayName 'Microsoft Edge (connexions sortantes)' -ErrorAction SilentlyContinue))"
         $k = 'HKLM:\SYSTEM\CurrentControlSet\Services\Audiosrv'
         foreach ($n in 'Start', 'DelayedAutostart') { $s = Get-LabRegistrySnapshot -Path $k -Name $n; "EMP|audiosrv|$n|$($s.Exists)|$($s.Value)" }
         "EMP|audiosrv|etat|$((Get-Service Audiosrv).Status)"

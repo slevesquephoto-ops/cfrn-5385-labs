@@ -40,5 +40,40 @@
             Correction = 'services.msc : Audio Windows en démarrage Automatique, puis Démarrer. L''utilitaire de résolution des problèmes audio le signale aussi.'
             Incompatibles = @()
         }
+        @{
+            Id = 'RES-DNS'; Titre = 'Serveurs DNS invalides'; Portee = 'Machine'; Duree = '10 / 20'; Difficulte = 3
+            Recit = 'L''icône dit que je suis connectée, mais aucune page ne s''ouvre.'
+            Cause = 'Serveurs DNS manuels invalides (203.0.113.9/10) sur la carte de la connexion Internet.'
+            Correction = 'Paramètres de la carte > IPv4 > DNS : revenir à « Automatique (DHCP) ». ping par IP fonctionne, ping par nom échoue.'
+            Incompatibles = @('RES-IP', 'RES-CARTE')
+        }
+        @{
+            Id = 'RES-HOSTS'; Titre = 'Détournement par le fichier hosts'; Portee = 'Machine'; Duree = '10 / 15'; Difficulte = 3
+            Recit = 'Je n''arrive plus à aller sur la météo ni sur Radio-Canada, mais le reste fonctionne.'
+            Cause = 'Entrées dans C:\Windows\System32\drivers\etc\hosts qui envoient des sites neutres vers 0.0.0.0.'
+            Correction = 'Retirer les lignes ajoutées dans le fichier hosts, puis vider le cache DNS (ipconfig /flushdns).'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'RES-CARTE'; Titre = 'Carte réseau désactivée'; Portee = 'Machine'; Duree = '5 / 10'; Difficulte = 1
+            Recit = 'Plus d''Internet du tout, il y a un globe barré dans le coin.'
+            Cause = 'Carte réseau de la connexion Internet désactivée.'
+            Correction = 'Connexions réseau (ncpa.cpl) : clic droit sur la carte > Activer.'
+            Incompatibles = @('RES-DNS', 'RES-IP')
+        }
+        @{
+            Id = 'RES-IP'; Titre = 'IP fixe dans le mauvais sous-réseau'; Portee = 'Machine'; Duree = '10 / 15'; Difficulte = 3
+            Recit = 'Ça dit « Internet limité » et rien ne fonctionne.'
+            Cause = 'Adresse IP fixe 10.73.254.9/24 (hors du réseau local) sur la carte Internet.'
+            Correction = 'Paramètres de la carte > IPv4 : revenir à « Automatique (DHCP) » pour l''adresse et le DNS.'
+            Incompatibles = @('RES-DNS', 'RES-CARTE')
+        }
+        @{
+            Id = 'RES-PAREFEU'; Titre = 'Pare-feu bloque Edge'; Portee = 'Machine'; Duree = '15 / 25'; Difficulte = 4
+            Recit = 'Edge dit que je n''ai pas Internet, mais les mises à jour passent et un autre navigateur marche.'
+            Cause = 'Règle de pare-feu sortante qui bloque msedge.exe (nom d''apparence normale).'
+            Correction = 'Pare-feu Windows Defender > Règles de trafic sortant : trouver et supprimer la règle qui bloque Edge.'
+            Incompatibles = @()
+        }
     )
 }
