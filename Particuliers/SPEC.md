@@ -104,7 +104,7 @@ script générateur ne portent la signature (seul le fichier déposé déclenche
 | SYS-DISQUE | « Il me dit que mon disque est plein. » | Gros fichier dans un dossier temporaire caché du profil (laisse environ 1 Go libre) | P | 15 / 25 |
 | SYS-DEMARRAGE | « Il est devenu très lent à démarrer. » | Éléments de démarrage inutiles (clés Run et tâche planifiée) | P+M | 15 / 20 |
 | SYS-SANSECHEC | « C'est écrit Mode sans échec dans les coins. » | Démarrage forcé en mode sans échec (`bcdedit safeboot minimal`) | M | 10 / 15 |
-| SYS-HEURE | « Aucun site sécurisé ne fonctionne, il parle de mon horloge. » | Date décalée et synchronisation de l'heure désactivée (simule la pile CMOS) | M | 15 / 20 |
+| SYS-HEURE | « J'ai réglé l'heure moi-même, la date est en 2016 et aucun site sécurisé ne fonctionne. » | Synchro automatique coupée (W32Time désactivé, NoSync) + date reculée à 2016 par mauvaise manipulation. Panne **logicielle** ≠ pile CMOS morte (défaut matériel, fiche physique à part) | M | 15 / 20 |
 | SYS-SON | « Je n'ai plus de son. » | Service Audio Windows désactivé | M | 10 / 15 |
 | SYS-IMPRIM | « Je ne peux plus imprimer. » | Spouleur d'impression désactivé | M | 10 / 15 |
 | SYS-USB | « Ma clé USB n'est pas reconnue, mais mon clavier USB marche. » | Stockage de masse USB désactivé (service `USBSTOR` Start = 4); HID intacts | M | 10 / 15 |

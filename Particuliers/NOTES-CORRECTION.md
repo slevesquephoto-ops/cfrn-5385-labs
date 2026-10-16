@@ -118,6 +118,21 @@ Points d'attention pour le test :
   une panne de profil déjà OK (ex. ACC-SOURIS) en plus de CPT-TEMP, pour confirmer l'absence de
   régression.
 
+## Panne physique : pile CMOS morte (vrai matériel seulement)
+
+Exercice **matériel**, non scriptable (comme les R2 d'AB / RES-DUPLEX). Insérer une pile CMOS morte
+dans le poste.
+
+- **Symptôme** : à chaque démarrage, l'heure et la date sont fausses (souvent une date très ancienne),
+  et l'écart **revient après chaque extinction** malgré une remise à l'heure. Messages d'erreur de
+  certificat sur les sites HTTPS.
+- **Correction attendue** : remplacer la pile CMOS, régler l'heure dans le BIOS/UEFI, puis vérifier que
+  « Régler l'heure automatiquement » est activé dans Windows.
+- **Distinction clé à valoriser à la correction** : cette panne se répare en **changeant la pile**;
+  SYS-HEURE (logicielle) se répare en **réactivant la synchro** et ne bougerait pas si on changeait la
+  pile. L'élève doit reconnaître lequel des deux cas il a devant lui (l'heure qui *revient* fausse après
+  extinction = pile; l'heure fausse mais *stable* avec synchro coupée = logiciel).
+
 ## Idée en attente
 
 - **ACC-ENVERS** (prank « tout à l'envers » : rotation 180° + souris inversée + capture en fond

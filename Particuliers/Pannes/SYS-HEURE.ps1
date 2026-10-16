@@ -1,5 +1,5 @@
 ﻿#requires -version 5.1
-# SYS-HEURE : synchronisation de l'heure désactivée + date reculée (simule une pile CMOS morte), tout le poste.
+# SYS-HEURE : synchronisation automatique de l'heure coupée + date erronée (mauvaise manipulation du client), tout le poste.
 # Voir Particuliers-Config.psd1. En VM, le service d'intégration Hyper-V recorrige l'horloge :
 # on vérifie seulement la configuration (service W32Time et Type de synchronisation).
 $svc = 'W32Time'
@@ -23,8 +23,9 @@ $blocs = @{
         if ((Get-Service -Name $svc).Status -eq 'Running') { Stop-Service -Name $svc -Force }
         $out = & sc.exe config $svc start= disabled
         if ($LASTEXITCODE -ne 0) { throw "sc.exe config $svc start= disabled : $out" }
-        # Reculer la date de 3 jours (sur matériel réel, l'écart persiste faute de synchro).
-        Set-Date -Date (Get-Date).AddDays(-3) | Out-Null
+        # Date reculée à 2016 (mauvaise manipulation) : avant la validité des certificats actuels ->
+        # sur matériel réel, les sites HTTPS tombent en erreur de certificat et l'écart persiste (synchro coupée).
+        Set-Date -Date '2016-01-01 08:00:00' | Out-Null
     }
     Retirer = {
         param($Ctx, $Etat)

@@ -194,10 +194,10 @@
             Incompatibles = @('SYS-SON', 'SYS-IMPRIM', 'RES-DNS', 'RES-PROXY', 'RES-HOSTS', 'RES-CARTE', 'RES-IP', 'RES-PAREFEU')
         }
         @{
-            Id = 'SYS-HEURE'; Titre = 'Horloge décalée, synchro coupée'; Portee = 'Machine'; Duree = '15 / 20'; Difficulte = 3
-            Recit = 'Aucun site sécurisé ne fonctionne, le navigateur parle d''un problème de date ou de certificat.'
-            Cause = 'Date reculée de 3 jours et synchronisation de l''heure coupée (service W32Time désactivé, Type NoSync) : simule une pile CMOS morte.'
-            Correction = 'Paramètres > Heure et langue > Date et heure : « Régler l''heure automatiquement » activé (relance W32Time), puis « Synchroniser maintenant ». Sur matériel réel, remplacer la pile CMOS si l''écart revient.'
+            Id = 'SYS-HEURE'; Titre = 'Date erronée (2016), synchro coupée'; Portee = 'Machine'; Duree = '15 / 20'; Difficulte = 3
+            Recit = 'J''ai voulu régler l''heure moi-même et maintenant la date est en 2016; rien ne se corrige tout seul et aucun site sécurisé ne fonctionne.'
+            Cause = 'Synchronisation automatique de l''heure désactivée (service W32Time désactivé, Type NoSync) et date reculée à 2016 par une mauvaise manipulation : l''horloge est antérieure à la validité des certificats HTTPS.'
+            Correction = 'Paramètres > Heure et langue > Date et heure : activer « Régler l''heure automatiquement » (relance W32Time) puis « Synchroniser maintenant »; au besoin corriger la date à la main. Panne LOGICIELLE : à ne pas confondre avec une pile CMOS morte (défaut matériel), qui ne se corrige pas ainsi.'
             Incompatibles = @()
         }
         @{
