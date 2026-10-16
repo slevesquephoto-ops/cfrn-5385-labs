@@ -923,20 +923,42 @@ function Get-ABRunKey {
     return (Join-Path $HiveRoot 'Software\Microsoft\Windows\CurrentVersion\Run')
 }
 
+# Fichiers déposés sur le poste : commentaires neutres seulement (règle 6, discrétion);
+# ASCII sans accent (wscript lit les .vbs en ANSI).
 $script:VbsInutile = @'
-' Utilitaire interne Architecture Boréale.
-' (fictif : ne fait rien d'utile, sert à alourdir le démarrage)
+' Utilitaire interne Architecture Boreale
 WScript.Sleep 1500
 '@
 
-function Get-ABGreedyScript {
-    <# Contenu du script « gourmand » : retient environ MemoireMo de mémoire et dort. #>
-    param([Parameter(Mandatory)][int]$MemoireMo)
+function Get-ABGreedyLauncher {
+    <# Lanceur .vbs : démarre le script gourmand caché (aucune fenêtre de terminal). #>
+    param([Parameter(Mandatory)][string]$Dossier, [Parameter(Mandatory)][string]$Script)
     return @"
-# Indexeur de documents Architecture Boréale (fictif : retient de la mémoire, ralentit le poste)
-`$bloc = New-Object 'byte[]' ($MemoireMo * 1MB)
-for (`$i = 0; `$i -lt `$bloc.Length; `$i += 4096) { `$bloc[`$i] = 1 }
-while (`$true) { Start-Sleep -Seconds 60 }
+' Indexation des documents Architecture Boreale
+Set sh = CreateObject("WScript.Shell")
+ps1 = sh.ExpandEnvironmentStrings("%APPDATA%") & "\$Dossier\$Script"
+sh.Run "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File """ & ps1 & """", 0, False
+"@
+}
+
+function Get-ABGreedyScript {
+    <#
+    Contenu du script « gourmand » : retient MemoireMo de mémoire (blocs de 256 Mo, données
+    aléatoires donc incompressibles) et la retouche toutes les 30 s pour qu'elle reste en
+    mémoire vive, visible dans le Gestionnaire des tâches (sinon Windows la renvoie au
+    fichier d'échange et la lenteur disparaît).
+    #>
+    param([Parameter(Mandatory)][int]$MemoireMo)
+    $nb = [math]::Ceiling($MemoireMo / 256)
+    return @"
+# Indexeur de documents Architecture Boreale
+`$alea = New-Object Random
+`$cache = New-Object 'System.Collections.Generic.List[byte[]]'
+for (`$n = 0; `$n -lt $nb; `$n++) { `$b = New-Object 'byte[]' (256MB); `$alea.NextBytes(`$b); `$cache.Add(`$b) }
+while (`$true) {
+    foreach (`$b in `$cache) { [Array]::Reverse(`$b) }
+    Start-Sleep -Seconds 30
+}
 "@
 }
 
@@ -956,6 +978,7 @@ function Add-ABStartupClutter {
     Set-Content -LiteralPath (Join-Path $scriptDir 'assistant.vbs') -Value $script:VbsInutile -Encoding ASCII
     Set-Content -LiteralPath (Join-Path $scriptDir 'synchro.vbs') -Value $script:VbsInutile -Encoding ASCII
     Set-Content -LiteralPath (Join-Path $scriptDir $r4.Tache.Script) -Value $script:VbsInutile -Encoding ASCII
+    Set-Content -LiteralPath (Join-Path $scriptDir $r4.LanceurGourmand) -Value (Get-ABGreedyLauncher -Dossier $r4.DossierScripts -Script $r4.ScriptGourmand) -Encoding ASCII
     Set-Content -LiteralPath $greedy -Value (Get-ABGreedyScript -MemoireMo $r4.MemoireMo) -Encoding UTF8
     & icacls.exe $scriptDir /setowner "$env:COMPUTERNAME\$Compte" /T /C /Q | Out-Null
 
@@ -968,8 +991,8 @@ function Add-ABStartupClutter {
         foreach ($nom in $r4.Demarrage.Keys) {
             $snap = Get-LabRegistrySnapshot -Path $run -Name $nom
             $state.Run += , ([ordered]@{ Name = $nom; Exists = $snap.Exists; Value = $snap.Value; Type = $snap.Type })
-            $cmd = $r4.Demarrage[$nom].Replace('{SCRIPT}', $greedy)
-            Set-LabRegistryValue -Path $run -Name $nom -Value $cmd -Type String
+            # ExpandString : Windows développe %APPDATA% au lancement (REG_SZ ne l'est pas)
+            Set-LabRegistryValue -Path $run -Name $nom -Value $r4.Demarrage[$nom] -Type ExpandString
         }
     }
     # Tâche au logon sous l'identité de lpgauthier (interactive, aucun mot de passe requis)

@@ -130,12 +130,16 @@
         # La couche matérielle (ajout de RAM) est manuelle : le Verifier rapporte la RAM sans échouer.
         R4 = @{
             Compte      = 'lpgauthier'
-            # Valeurs ajoutées à HKCU\...\Run (nom = commande, {SCRIPT} = script gourmand déposé)
+            # Valeurs ajoutées à HKCU\...\Run, en REG_EXPAND_SZ (sinon %APPDATA% n'est pas
+            # développé et wscript cherche le script dans C:\Windows\System32).
             Demarrage   = @{
                 'AssistantBureautique' = 'wscript.exe "%APPDATA%\Boreale\assistant.vbs"'
                 'SynchroProjets'       = 'wscript.exe "%APPDATA%\Boreale\synchro.vbs"'
-                'IndexationDocuments'  = 'powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File "{SCRIPT}"'
+                'IndexationDocuments'  = 'wscript.exe "%APPDATA%\Boreale\indexation.vbs"'
             }
+            # Lanceur du script gourmand : WshShell.Run caché. Un powershell.exe lancé
+            # directement ouvrirait une fenêtre Windows Terminal (-WindowStyle Hidden ignoré).
+            LanceurGourmand = 'indexation.vbs'
             # Tâche planifiée au logon (nom plausible)
             Tache       = @{
                 Nom     = 'Boreale-MiseAJour'
@@ -145,7 +149,8 @@
             DossierScripts = 'Boreale'
             # Script « gourmand » qui retient de la mémoire (déposé dans DossierScripts)
             ScriptGourmand = 'indexeur.ps1'
-            MemoireMo      = 700
+            # 3 Go sur un M700 à 8 Go : lenteur nette; fluide après l'ajout de RAM (16 Go)
+            MemoireMo      = 3072
         }
     }
 
