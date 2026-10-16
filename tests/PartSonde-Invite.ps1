@@ -78,7 +78,11 @@ switch ($Mode) {
         $vals = @(
             @($is, 'ProxyEnable'), @($is, 'ProxyServer'), @($is, 'ProxyOverride'),
             @("$is\Connections", 'DefaultConnectionSettings'), @("$is\Connections", 'SavedLegacySettings'),
-            @('Control Panel\Mouse', 'SwapMouseButtons')
+            @('Control Panel\Mouse', 'SwapMouseButtons'),
+            @('Software\Microsoft\Windows\CurrentVersion\Policies\Explorer', 'NoDesktop'),
+            @('Software\Microsoft\Windows\CurrentVersion\Policies\Explorer', 'NoControlPanel'),
+            @('Software\Microsoft\Windows\CurrentVersion\Policies\Explorer', 'NoClose'),
+            @('Software\Policies\Microsoft\Windows\System', 'DisableCMD')
         )
         if (Get-LocalUser -Name $Client -ErrorAction SilentlyContinue) {
             $hive = Mount-LabUserHive -UserName $Client

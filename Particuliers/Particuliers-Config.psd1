@@ -89,5 +89,37 @@
             Correction = 'Installer et lancer un autre antivirus (ex. Malwarebytes) pour détecter le fichier, retirer l''exclusion dans Defender, puis supprimer la tâche et son script. (Exige la protection contre les falsifications désactivée pour l''installation.)'
             Incompatibles = @('SEC-EICAR-DEF')
         }
+
+        # --- Restrictions par stratégie (restes d'un faux « optimiseur » ou « contrôle parental ») ---
+        # Portée Profil : valeurs de stratégie dans la ruche du client. La correction passe par
+        # gpedit.msc ou le registre (pas un simple réglage), d'où une difficulté plus élevée.
+        @{
+            Id = 'STRAT-BUREAU'; Titre = 'Icônes du bureau masquées (stratégie)'; Portee = 'Profil'; Duree = '10 / 15'; Difficulte = 3
+            Recit = 'Mon bureau est complètement vide, toutes mes icônes ont disparu. Clic droit « Afficher les icônes du bureau » ne change rien.'
+            Cause = 'Stratégie NoDesktop = 1 (HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer) : reste d''un faux optimiseur.'
+            Correction = 'gpedit.msc > Configuration utilisateur > Modèles d''administration > Bureau > « Masquer et désactiver tous les éléments du Bureau » : Non configuré. Ou supprimer la valeur NoDesktop dans le registre, puis fermer la session.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'STRAT-PANNEAU'; Titre = 'Panneau de configuration bloqué (stratégie)'; Portee = 'Profil'; Duree = '10 / 15'; Difficulte = 3
+            Recit = 'Quand je clique sur le Panneau de configuration, un message dit que c''est bloqué par mon administrateur. Les Paramètres ne s''ouvrent plus non plus.'
+            Cause = 'Stratégie NoControlPanel = 1 (HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer) : bloque le Panneau de configuration et l''application Paramètres.'
+            Correction = 'gpedit.msc > Configuration utilisateur > Modèles d''administration > Panneau de configuration > « Interdire l''accès au Panneau de configuration et à l''application Paramètres du PC » : Non configuré. Ou supprimer la valeur NoControlPanel dans le registre.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'STRAT-ARRET'; Titre = 'Arrêter / Redémarrer retirés (stratégie)'; Portee = 'Profil'; Duree = '10 / 15'; Difficulte = 2
+            Recit = 'Je ne trouve plus comment éteindre l''ordinateur, le bouton a disparu du menu Démarrer.'
+            Cause = 'Stratégie NoClose = 1 (HKCU\Software\Microsoft\Windows\CurrentVersion\Policies\Explorer) : retire les commandes Arrêter / Redémarrer du menu Démarrer.'
+            Correction = 'gpedit.msc > Configuration utilisateur > Modèles d''administration > Menu Démarrer et barre des tâches > « Supprimer et empêcher l''accès aux commandes Arrêter... » : Non configuré. Ou supprimer la valeur NoClose dans le registre. (Arrêt possible entre-temps par Alt+F4 sur le bureau ou shutdown /s.)'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'STRAT-CMD'; Titre = 'Invite de commandes désactivée (stratégie)'; Portee = 'Profil'; Duree = '10 / 15'; Difficulte = 2
+            Recit = 'Mon petit-fils veut m''aider à distance mais l''invite de commandes ne s''ouvre plus : « L''invite de commandes a été désactivée par votre administrateur ».'
+            Cause = 'Stratégie DisableCMD = 2 (HKCU\Software\Policies\Microsoft\Windows\System) : cmd.exe interactif bloqué, scripts encore permis.'
+            Correction = 'gpedit.msc > Configuration utilisateur > Modèles d''administration > Système > « Empêcher l''accès à l''invite de commandes » : Non configuré. Ou supprimer la valeur DisableCMD dans le registre. (Le diagnostic se fait par PowerShell, non visé par cette stratégie.)'
+            Incompatibles = @()
+        }
     )
 }

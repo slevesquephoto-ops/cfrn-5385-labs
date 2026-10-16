@@ -1,8 +1,7 @@
 # Pannes spontanées — Clients particuliers
 
-Spécification de référence (brouillon du 2026-10-13, **à approuver par l'enseignant**).
-Une fois approuvée, ce fichier fait foi : demander avant de changer un nom, un client,
-une panne ou une règle.
+Spécification de référence (**approuvée par l'enseignant le 2026-10-13**).
+Ce fichier fait foi : demander avant de changer un nom, un client, une panne ou une règle.
 
 ## Principe
 
@@ -50,6 +49,13 @@ choisit, sur n'importe quel poste du labo, **un client et une ou plusieurs panne
 
 Portée : **M** = toute la machine, **P** = profil du client. Durées : rapide / normal.
 
+Difficulté (champ `Difficulte`, 1 à 5) : sert à la « panne au hasard » de la console et
+au dosage par l'enseignant. Repère de calibrage : une panne qui se corrige par un simple
+réglage bien visible reste **1–2** (ex. ACC-SOURIS, RES-CARTE). On vise la plupart des
+pannes à **3+**, soit en cachant le bon chemin de correction, soit en désactivant le
+réglage évident (ex. une restriction par stratégie qu'on ne défait qu'au registre). Note :
+SYS-SON coupe le **service** audio — le panneau Son ne suffit pas, il faut `services.msc`.
+
 ### Réseau et Internet
 
 | ID | Ce que dit le client | Cause installée | Portée | Durée |
@@ -80,14 +86,14 @@ script générateur ne portent la signature (seul le fichier déposé déclenche
 | ID | Ce que dit le client | Cause installée | Portée | Durée |
 | --- | --- | --- | --- | --- |
 | SEC-EICAR-DEF | « Mon antivirus trouve un virus, je le supprime et il revient! » | Tâche planifiée qui redépose EICAR; **Defender reste actif** et le met en quarantaine à chaque fois | M | 20 / 35 |
-| SEC-EICAR-TIERS | « Mon ordinateur agit bizarrement, mais Defender dit que tout va bien. » | Même mécanisme, mais le **dossier de dépôt est exclu de Defender** : l'élève doit installer un autre antivirus | M | 25 / 40 — *exige la protection contre les falsifications désactivée; à valider en VM* |
+| SEC-EICAR-TIERS | « Mon ordinateur agit bizarrement, mais Defender dit que tout va bien. » | Même mécanisme, mais le **dossier de dépôt est exclu de Defender** : l'élève doit installer un autre antivirus | M | 25 / 40 — *validé en VM (W10 et W11)* |
 
 - Les deux variantes sont incompatibles entre elles (même tâche, même dossier).
 - But pédagogique : comprendre que supprimer le fichier ne suffit pas; trouver et retirer
   la tâche qui le relance. SEC-EICAR-TIERS pousse en plus à évaluer un antivirus tiers.
-- SEC-EICAR-TIERS ajoute une exclusion Defender (refusée si la protection contre les
-  falsifications est active) : la désactiver à la main sur le poste, comme une préparation
-  manuelle. Le Retrait la remet comme avant.
+- SEC-EICAR-TIERS ajoute une exclusion Defender. Constat en VM (W10 et W11, commit
+  `eed298a`) : l'exclusion s'ajoute **même avec la protection contre les falsifications
+  active**; aucune préparation manuelle n'est donc requise. Le Retrait la remet comme avant.
 
 ### Système et performance
 
@@ -109,6 +115,19 @@ script générateur ne portent la signature (seul le fichier déposé déclenche
 | CPT-TEMP | « Tous mes fichiers ont disparu! » (profil temporaire) | Inscription du profil (`ProfileList\<SID>`) renommée en `.bak` | P | 20 / 30 — *à valider en VM* |
 | FIC-CACHES | « Mes dossiers ont disparu après avoir branché une clé. » | Dossiers du client marqués cachés et système | P | 10 / 15 |
 | FIC-REDIR | « Mon dossier Documents est introuvable. » | Dossier Documents redirigé vers `D:\Documents` (inexistant) | P | 15 / 20 |
+
+### Restrictions par stratégie (registre, plus coriaces)
+
+Restes d'un faux « optimiseur » ou « contrôle parental » installé par le client. Portée
+**P** (ruche du client). La correction ne passe pas par un simple réglage : il faut
+`gpedit.msc` ou le registre. Toutes compatibles entre elles et avec les autres pannes.
+
+| ID | Ce que dit le client | Cause installée | Portée | Durée |
+| --- | --- | --- | --- | --- |
+| STRAT-BUREAU | « Mon bureau est vide, toutes mes icônes ont disparu. » | `NoDesktop = 1` (Policies\Explorer) : masque tous les éléments du bureau | P | 10 / 15 |
+| STRAT-PANNEAU | « Le Panneau de configuration est bloqué par mon administrateur. » | `NoControlPanel = 1` (Policies\Explorer) : bloque Panneau de configuration **et** Paramètres | P | 10 / 15 |
+| STRAT-ARRET | « Je ne trouve plus comment éteindre l'ordinateur. » | `NoClose = 1` (Policies\Explorer) : retire Arrêter / Redémarrer du menu Démarrer | P | 10 / 15 |
+| STRAT-CMD | « L'invite de commandes ne s'ouvre plus. » | `DisableCMD = 2` (Policies\Microsoft\Windows\System) : cmd bloqué, scripts permis | P | 10 / 15 |
 
 ### Accessibilité et périphériques (rapides, pour réchauffer)
 
