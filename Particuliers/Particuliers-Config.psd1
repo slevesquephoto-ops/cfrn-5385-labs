@@ -90,6 +90,43 @@
             Incompatibles = @('SEC-EICAR-DEF')
         }
 
+        # --- Système et performance ---
+        @{
+            Id = 'SYS-IMPRIM'; Titre = 'Spouleur d''impression désactivé'; Portee = 'Machine'; Duree = '10 / 15'; Difficulte = 2
+            Recit = 'Je ne peux plus imprimer : rien ne sort et la file d''attente ne s''ouvre même pas.'
+            Cause = 'Service « Spouleur d''impression » (Spooler) arrêté et désactivé.'
+            Correction = 'services.msc : Spouleur d''impression en démarrage Automatique, puis Démarrer.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'SYS-SANSECHEC'; Titre = 'Démarrage en mode sans échec'; Portee = 'Machine'; Duree = '10 / 15'; Difficulte = 3
+            Recit = 'C''est écrit « Mode sans échec » dans les quatre coins et plus rien ne marche comme avant.'
+            Cause = 'Démarrage forcé en mode sans échec (bcdedit : safeboot minimal sur l''entrée courante).'
+            Correction = 'msconfig > Démarrer > décocher « Démarrage sécurisé », ou bcdedit /deletevalue {current} safeboot, puis redémarrer.'
+            Incompatibles = @('SYS-SON', 'SYS-IMPRIM', 'RES-DNS', 'RES-PROXY', 'RES-HOSTS', 'RES-CARTE', 'RES-IP', 'RES-PAREFEU')
+        }
+        @{
+            Id = 'SYS-HEURE'; Titre = 'Horloge décalée, synchro coupée'; Portee = 'Machine'; Duree = '15 / 20'; Difficulte = 3
+            Recit = 'Aucun site sécurisé ne fonctionne, le navigateur parle d''un problème de date ou de certificat.'
+            Cause = 'Date reculée de 3 jours et synchronisation de l''heure coupée (service W32Time désactivé, Type NoSync) : simule une pile CMOS morte.'
+            Correction = 'Paramètres > Heure et langue > Date et heure : « Régler l''heure automatiquement » activé (relance W32Time), puis « Synchroniser maintenant ». Sur matériel réel, remplacer la pile CMOS si l''écart revient.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'SYS-DISQUE'; Titre = 'Disque presque plein'; Portee = 'Profil'; Duree = '15 / 25'; Difficulte = 3
+            Recit = 'Windows me dit sans arrêt que mon disque est plein, mais je n''ai pourtant rien installé de gros.'
+            Cause = 'Gros fichier dans un dossier temporaire caché du profil (AppData\Local\Temp\MediaCache), laisse ~1 Go libre.'
+            Correction = 'Afficher les éléments cachés et protégés, trouver le gros fichier dans le dossier temporaire du profil et le supprimer. Nettoyage de disque / Stockage pour confirmer l''espace repris.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'SYS-DEMARRAGE'; Titre = 'Démarrage lent (éléments inutiles)'; Portee = 'Machine'; Duree = '15 / 20'; Difficulte = 4
+            Recit = 'Mon ordinateur est devenu très lent à démarrer et à ouvrir ma session.'
+            Cause = 'Éléments de démarrage inutiles mais inoffensifs à trois endroits : clé Run du profil (HKCU), clé Run de la machine (HKLM) et tâche planifiée à l''ouverture de session.'
+            Correction = 'Gestionnaire des tâches > Démarrage (clés Run) + Planificateur de tâches (tâche MediaLibraryIndexer). Autoruns montre les trois d''un coup. Désactiver puis supprimer chaque élément.'
+            Incompatibles = @()
+        }
+
         # --- Restrictions par stratégie (restes d'un faux « optimiseur » ou « contrôle parental ») ---
         # Portée Profil : valeurs de stratégie dans la ruche du client. La correction passe par
         # gpedit.msc ou le registre (pas un simple réglage), d'où une difficulté plus élevée.

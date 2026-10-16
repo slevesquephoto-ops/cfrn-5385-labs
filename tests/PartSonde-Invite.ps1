@@ -74,6 +74,16 @@ switch ($Mode) {
         $k = 'HKLM:\SYSTEM\CurrentControlSet\Services\Audiosrv'
         foreach ($n in 'Start', 'DelayedAutostart') { $s = Get-LabRegistrySnapshot -Path $k -Name $n; "EMP|audiosrv|$n|$($s.Exists)|$($s.Value)" }
         "EMP|audiosrv|etat|$((Get-Service Audiosrv).Status)"
+        $spk = 'HKLM:\SYSTEM\CurrentControlSet\Services\Spooler'
+        foreach ($n in 'Start', 'DelayedAutostart') { $s = Get-LabRegistrySnapshot -Path $spk -Name $n; "EMP|spooler|$n|$($s.Exists)|$($s.Value)" }
+        "EMP|spooler|etat|$((Get-Service Spooler).Status)"
+        $w32 = 'HKLM:\SYSTEM\CurrentControlSet\Services\W32Time'
+        "EMP|w32time|Start|$((Get-LabRegistrySnapshot -Path $w32 -Name 'Start').Value)"
+        "EMP|w32time|Type|$((Get-LabRegistrySnapshot -Path "$w32\Parameters" -Name 'Type').Value)"
+        $sb = & bcdedit /enum '{current}' 2>$null | Where-Object { $_ -match '^\s*safeboot\s+\S' } | Select-Object -First 1
+        "EMP|bcd|safeboot|$([bool]$sb)"
+        "EMP|run|CloudSyncHelper|$((Get-LabRegistrySnapshot -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name 'CloudSyncHelper').Exists)"
+        "EMP|tache|MediaLibraryIndexer|$([bool](Get-ScheduledTask -TaskName 'MediaLibraryIndexer' -ErrorAction SilentlyContinue))"
         $is = 'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
         $vals = @(
             @($is, 'ProxyEnable'), @($is, 'ProxyServer'), @($is, 'ProxyOverride'),
@@ -82,7 +92,8 @@ switch ($Mode) {
             @('Software\Microsoft\Windows\CurrentVersion\Policies\Explorer', 'NoDesktop'),
             @('Software\Microsoft\Windows\CurrentVersion\Policies\Explorer', 'NoControlPanel'),
             @('Software\Microsoft\Windows\CurrentVersion\Policies\Explorer', 'NoClose'),
-            @('Software\Policies\Microsoft\Windows\System', 'DisableCMD')
+            @('Software\Policies\Microsoft\Windows\System', 'DisableCMD'),
+            @('Software\Microsoft\Windows\CurrentVersion\Run', 'MediaAgent')
         )
         if (Get-LocalUser -Name $Client -ErrorAction SilentlyContinue) {
             $hive = Mount-LabUserHive -UserName $Client
@@ -92,6 +103,11 @@ switch ($Mode) {
                     "EMP|ruche|$($v[0])|$($v[1])|$($s.Exists)|$($s.Type)|$($s.Value)"
                 }
             } finally { Dismount-LabUserHive -Hive $hive }
+            $prof = Get-PartProfilePath -Compte $Client
+            if ($prof) {
+                "EMP|fichier|cache|$(Test-Path -LiteralPath (Join-Path $prof 'AppData\Local\Temp\MediaCache\cache.dat'))"
+                "EMP|fichier|agent|$(Test-Path -LiteralPath (Join-Path $prof 'AppData\Local\MediaAgent\agent.vbs'))"
+            }
         } else { "EMP|ruche|client absent" }
     }
 }
