@@ -27,6 +27,20 @@
             Incompatibles = @()
         }
         @{
+            Id = 'ACC-CLAVIER'; Titre = 'Disposition de clavier anglaise par défaut'; Portee = 'Profil'; Duree = '5 / 10'; Difficulte = 1
+            Recit = 'Mes « é » écrivent des « / » et mes « ? » des « É ». Le clavier tape de travers.'
+            Cause = 'Disposition « États-Unis » (QWERTY) ajoutée et placée par défaut dans le profil (HKCU\Keyboard Layout\Preload, entrée « 1 » = 00000409).'
+            Correction = 'Paramètres > Heure et langue > Langue et région : remettre « Français (Canada) » / la bonne disposition en premier, ou retirer la disposition anglaise. Prend effet à la réouverture de session.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'ACC-FILTRES'; Titre = 'Touches filtres activées'; Portee = 'Profil'; Duree = '5 / 10'; Difficulte = 1
+            Recit = 'Mon clavier ne répond plus comme avant : il faut que j''appuie longtemps sur une touche et les lettres ne se répètent plus.'
+            Cause = 'Touches filtres activées dans le profil (HKCU\Control Panel\Accessibility\Keyboard Response, Flags bit 0).'
+            Correction = 'Paramètres > Accessibilité > Clavier : désactiver « Touches filtres ». Maintenir Maj droite 8 s rouvre aussi la boîte de dialogue.'
+            Incompatibles = @()
+        }
+        @{
             Id = 'RES-PROXY'; Titre = 'Proxy fantôme'; Portee = 'Profil'; Duree = '10 / 20'; Difficulte = 2
             Recit = 'Aucun site ne s''ouvre, ça tourne dans le vide. Pourtant mon petit-fils dit que le Wi-Fi marche.'
             Cause = 'Serveur proxy 127.0.0.1:8080 dans le profil (restant d''un logiciel publicitaire désinstallé).'
@@ -102,6 +116,66 @@
             Cause = 'Clé Run du profil qui lance au logon un script caché bouclant sur une application (remplit la mémoire). Punitif : ne se déclenche qu''à l''ouverture de session du client.'
             Correction = 'Se connecter avec un AUTRE compte (ou Windows RE), retirer la clé Run et le script caché, puis fermer les fenêtres ouvertes. La session du client redevient utilisable.'
             Incompatibles = @()
+        }
+
+        # --- Navigateur et sécurité ---
+        @{
+            Id = 'NAV-PIRATE'; Titre = 'Navigateur détourné (Edge)'; Portee = 'Machine'; Duree = '15 / 25'; Difficulte = 3
+            Recit = 'Ma page d''accueil a changé toute seule et mes recherches passent par un drôle de moteur « Recherche Express ».'
+            Cause = 'Stratégies Edge (HKLM\SOFTWARE\Policies\Microsoft\Edge) : page d''accueil vers une page locale « Recherche Express » et moteur par défaut factice. Bandeau « Géré par votre organisation ».'
+            Correction = 'Supprimer les stratégies Edge (clé HKLM\SOFTWARE\Policies\Microsoft\Edge ou via gpedit) puis rouvrir Edge. Vérifier edge://policy et edge://settings/searchEngines.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'PUP-FAUX'; Titre = 'Faux logiciel « OptimiseurPC Pro »'; Portee = 'Profil'; Duree = '20 / 30'; Difficulte = 4
+            Recit = 'Un logiciel « OptimiseurPC Pro » s''ouvre au démarrage et me dit que j''ai plein de virus, il veut que je paie.'
+            Cause = 'Faux logiciel indésirable à trois endroits : entrée dans « Applications installées » (clé Uninstall), démarrage automatique (clé Run du profil) et tâche planifiée ouvrant une page d''alerte locale à l''ouverture de session.'
+            Correction = 'Désinstaller / supprimer l''entrée Applications, retirer l''élément de démarrage (Gestionnaire des tâches > Démarrage) et la tâche planifiée (Autoruns les montre tous). Supprimer le dossier dans ProgramData.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'SEC-EXCL'; Titre = 'Exclusion Defender sur tout le disque'; Portee = 'Machine'; Duree = '10 / 15'; Difficulte = 3
+            Recit = 'Mon ordinateur agit bizarrement, mais Windows Defender dit que tout va bien et ne trouve jamais rien.'
+            Cause = 'Exclusion Microsoft Defender ajoutée sur C:\ : l''antivirus ne scanne plus rien. Se découvre en vérifiant les paramètres de l''antivirus.'
+            Correction = 'Sécurité Windows > Protection contre les virus et menaces > Gérer les paramètres > Exclusions : retirer C:\. (Protection contre les falsifications à désactiver pour modifier les exclusions.)'
+            Incompatibles = @('SEC-EICAR-TIERS')
+        }
+
+        # --- Comptes et fichiers ---
+        @{
+            Id = 'CPT-MDP'; Titre = 'Mot de passe oublié / changé'; Portee = 'Profil'; Duree = '10 / 15'; Difficulte = 2
+            Recit = 'J''ai oublié mon mot de passe et je n''arrive plus à ouvrir ma session.'
+            Cause = 'Mot de passe du client remplacé par une valeur inconnue.'
+            Correction = 'Depuis un autre compte administrateur : gestion des comptes locaux (lusrmgr.msc ou net user) pour redéfinir un mot de passe. Le client le changera ensuite.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'CPT-ADMIN'; Titre = 'Client retiré des Administrateurs'; Portee = 'Profil'; Duree = '10 / 15'; Difficulte = 2
+            Recit = 'Je ne peux plus rien installer ni changer les réglages : tout me demande un mot de passe administrateur.'
+            Cause = 'Compte du client retiré du groupe Administrateurs (clients administrateurs seulement).'
+            Correction = 'Depuis un autre compte administrateur : Paramètres > Comptes, ou lusrmgr.msc, pour remettre le client dans le groupe Administrateurs.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'FIC-CACHES'; Titre = 'Dossiers personnels cachés'; Portee = 'Profil'; Duree = '10 / 15'; Difficulte = 2
+            Recit = 'Mes dossiers Documents, Images et Bureau ont disparu après avoir branché une clé USB.'
+            Cause = 'Dossiers personnels du profil marqués « cachés + système » (effet typique d''une clé USB infectée).'
+            Correction = 'Explorateur > Affichage : montrer les éléments masqués ET décocher « Masquer les fichiers protégés du système d''exploitation », puis retirer les attributs caché/système (Propriétés ou attrib -h -s).'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'FIC-REDIR'; Titre = 'Documents redirigé vers un lecteur absent'; Portee = 'Profil'; Duree = '15 / 20'; Difficulte = 3
+            Recit = 'Mon dossier Documents est introuvable, Windows dit qu''un emplacement n''est pas disponible.'
+            Cause = 'Dossier Documents redirigé vers D:\Documents (lecteur inexistant) dans le profil (User Shell Folders / Shell Folders, valeur Personal).'
+            Correction = 'Propriétés du dossier Documents > Emplacement > Restaurer les valeurs par défaut, ou corriger la valeur Personal dans le registre pour revenir sous le profil.'
+            Incompatibles = @()
+        }
+        @{
+            Id = 'CPT-TEMP'; Titre = 'Profil temporaire (inscription renommée)'; Portee = 'Profil'; Duree = '20 / 30'; Difficulte = 5
+            Recit = 'Tous mes fichiers ont disparu, mon bureau est vide et Windows dit « Vous êtes connecté avec un profil temporaire ».'
+            Cause = 'Inscription du profil (HKLM\...\ProfileList\<SID>) renommée en « <SID>.bak » : Windows ouvre un profil temporaire. Les données sont intactes sur le disque.'
+            Correction = 'Planificateur hors session (autre compte) : dans ProfileList, renommer « <SID>.bak » en « <SID> » (retirer le .bak), vérifier ProfileImagePath, puis rouvrir la session du client. À DONNER SEULE.'
+            Incompatibles = @('ACC-SOURIS', 'ACC-CLAVIER', 'ACC-FILTRES', 'RES-PROXY', 'SEC-BOUCLE', 'PUP-FAUX', 'CPT-MDP', 'CPT-ADMIN', 'FIC-CACHES', 'FIC-REDIR', 'SYS-DISQUE', 'STRAT-BUREAU', 'STRAT-PANNEAU', 'STRAT-ARRET', 'STRAT-CMD', 'STRAT-RUN', 'STRAT-TASKMGR')
         }
 
         # --- Système et performance ---

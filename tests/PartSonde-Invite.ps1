@@ -87,6 +87,13 @@ switch ($Mode) {
         "EMP|run|CloudSyncHelper|$((Get-LabRegistrySnapshot -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name 'CloudSyncHelper').Exists)"
         "EMP|tache|MediaLibraryIndexer|$([bool](Get-ScheduledTask -TaskName 'MediaLibraryIndexer' -ErrorAction SilentlyContinue))"
         "EMP|tache|SystemUpdateFinalize|$([bool](Get-ScheduledTask -TaskName 'SystemUpdateFinalize' -ErrorAction SilentlyContinue))"
+        "EMP|tache|OptimiseurPCProAlerte|$([bool](Get-ScheduledTask -TaskName 'OptimiseurPCProAlerte' -ErrorAction SilentlyContinue))"
+        "EMP|edge|home|$((Get-LabRegistrySnapshot -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'HomepageLocation').Exists)"
+        "EMP|edge|search|$((Get-LabRegistrySnapshot -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' -Name 'DefaultSearchProviderName').Exists)"
+        "EMP|pup|uninstall|$([bool](Test-Path -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\OptimiseurPCPro'))"
+        "EMP|fichier|rechercheexpress|$(Test-Path -LiteralPath (Join-Path $env:ProgramData 'RechercheExpress\recherche-express.html'))"
+        "EMP|fichier|optimiseur|$(Test-Path -LiteralPath (Join-Path $env:ProgramData 'OptimiseurPCPro\alerte.html'))"
+        "EMP|defender|exclC|$(try { @((Get-MpPreference -ErrorAction Stop).ExclusionPath) -contains 'C:\' } catch { 'na' })"
         $is = 'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
         $vals = @(
             @($is, 'ProxyEnable'), @($is, 'ProxyServer'), @($is, 'ProxyOverride'),
@@ -99,7 +106,14 @@ switch ($Mode) {
             @('Software\Microsoft\Windows\CurrentVersion\Policies\Explorer', 'NoRun'),
             @('Software\Microsoft\Windows\CurrentVersion\Policies\System', 'DisableTaskMgr'),
             @('Software\Microsoft\Windows\CurrentVersion\Run', 'MediaAgent'),
-            @('Software\Microsoft\Windows\CurrentVersion\Run', 'MediaTools')
+            @('Software\Microsoft\Windows\CurrentVersion\Run', 'MediaTools'),
+            @('Software\Microsoft\Windows\CurrentVersion\Run', 'OptimiseurPC Pro'),
+            @('Keyboard Layout\Preload', '1'), @('Keyboard Layout\Preload', '2'),
+            @('Keyboard Layout\Preload', '3'), @('Keyboard Layout\Preload', '4'),
+            @('Keyboard Layout\Preload', '5'), @('Keyboard Layout\Preload', '6'),
+            @('Control Panel\Accessibility\Keyboard Response', 'Flags'),
+            @('Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders', 'Personal'),
+            @('Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders', 'Personal')
         )
         if (Get-LocalUser -Name $Client -ErrorAction SilentlyContinue) {
             $hive = Mount-LabUserHive -UserName $Client
@@ -109,11 +123,19 @@ switch ($Mode) {
                     "EMP|ruche|$($v[0])|$($v[1])|$($s.Exists)|$($s.Type)|$($s.Value)"
                 }
             } finally { Dismount-LabUserHive -Hive $hive }
+            $gsid = (Get-ABSid -Name 'Administrateurs').Value
+            $csid = (Get-LocalUser -Name $Client).SID.Value
+            "EMP|admin|$Client|$([bool]((Get-ABGroupMemberSid -GroupSid $gsid) -contains $csid))"
+            "EMP|profillist|$([bool](Test-Path -LiteralPath "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$csid"))"
             $prof = Get-PartProfilePath -Compte $Client
             if ($prof) {
                 "EMP|fichier|cache|$(Test-Path -LiteralPath (Join-Path $prof 'AppData\Local\Temp\MediaCache\cache.dat'))"
                 "EMP|fichier|agent|$(Test-Path -LiteralPath (Join-Path $prof 'AppData\Local\MediaAgent\agent.vbs'))"
                 "EMP|fichier|boucle|$(Test-Path -LiteralPath (Join-Path $prof 'AppData\Local\MediaTools\run.ps1'))"
+                foreach ($c in 'Documents', 'Pictures', 'Desktop', 'Downloads') {
+                    $pp = Join-Path $prof $c
+                    if (Test-Path -LiteralPath $pp) { "EMP|attr|$c|$([int](Get-Item -LiteralPath $pp -Force).Attributes)" } else { "EMP|attr|$c|absent" }
+                }
             }
         } else { "EMP|ruche|client absent" }
     }

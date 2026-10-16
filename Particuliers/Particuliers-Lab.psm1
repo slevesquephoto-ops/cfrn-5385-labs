@@ -306,18 +306,27 @@ function Test-PartClient {
 # Contexte passé aux blocs d'une panne
 # ---------------------------------------------------------------------------
 function Invoke-PartWithContext {
-    <# Monte la ruche du client (ou utilise celle de sa session), exécute $ScriptBlock avec le contexte. #>
+    <#
+    Monte la ruche du client (ou utilise celle de sa session), exécute $ScriptBlock avec le contexte.
+    Tolérant : si la ruche n'est pas montable (profil masqué/renommé par CPT-TEMP, par ex.),
+    le contexte est fourni quand même avec Root = $null (aucun accès HKCU). Les pannes de portée
+    Profil doivent alors échouer proprement; les pannes qui n'utilisent pas HKCU (CPT-TEMP) tournent.
+    #>
     param([Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][scriptblock]$ScriptBlock)
     $client = Get-PartClient -Compte $Compte
-    $hive = Mount-LabUserHive -UserName $Compte
+    $hive = $null
+    try { $hive = Mount-LabUserHive -UserName $Compte }
+    catch { Write-LabWarn "Ruche de $Compte non montable ($($_.Exception.Message)). Contexte sans HKCU (Root = `$null)." }
     try {
+        $root = $null; $session = $false
+        if ($hive) { $root = $hive.Root; $session = (-not $hive.Loaded) }
         $ctx = [pscustomobject]@{
             Client = $client; Compte = $Compte; Sid = (Get-ABUserSid -Compte $Compte)
-            Profil = (Get-PartProfilePath -Compte $Compte); Root = $hive.Root; SessionOuverte = (-not $hive.Loaded)
+            Profil = (Get-PartProfilePath -Compte $Compte); Root = $root; SessionOuverte = $session
         }
         & $ScriptBlock $ctx
     } finally {
-        Dismount-LabUserHive -Hive $hive
+        if ($hive) { Dismount-LabUserHive -Hive $hive }
     }
 }
 
