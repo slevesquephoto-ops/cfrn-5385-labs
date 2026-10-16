@@ -479,8 +479,13 @@ function Get-PartVerification {
         $checks += Invoke-PartWithContext -Compte $Compte -ScriptBlock {
             param($ctx)
             foreach ($p in $pannes) {
-                $t = & $p.Blocs.Tester $ctx
-                New-LabCheck -Name $p.Id -Passed ([bool]$t.Ok) -Detail ([string]$t.Detail)
+                try {
+                    $t = & $p.Blocs.Tester $ctx
+                    New-LabCheck -Name $p.Id -Passed ([bool]$t.Ok) -Detail ([string]$t.Detail)
+                } catch {
+                    # Tester non exécutable (ex. ruche non montable quand CPT-TEMP est actif) : non propre.
+                    New-LabCheck -Name $p.Id -Passed $false -Detail "non vérifiable : $($_.Exception.Message)"
+                }
             }
         }
     }

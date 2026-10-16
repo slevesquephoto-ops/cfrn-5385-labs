@@ -395,6 +395,7 @@ function Show-ABMenu {
     $items += @{ Section = 'AUTRES'; Cle = 'V'; Texte = 'Changer la variante de l''équipe'; Action = '#Variante' }
     $items += @{ Section = ''; Cle = 'R'; Texte = 'Ouvrir le README du poste (mots de passe)'; Action = '#Readme' }
     $items += @{ Section = ''; Cle = 'J'; Texte = 'Ouvrir le dernier journal'; Action = '#Journal' }
+    if (Test-Path -LiteralPath (Join-Path $Root 'Menu-Particuliers.ps1')) { $items += @{ Section = ''; Cle = 'P'; Texte = 'Ouvrir la console des pannes Particuliers'; Action = '#Particuliers' } }
     $items += @{ Section = ''; Cle = '0'; Texte = 'Quitter'; Action = '#Quitter' }
 
     foreach ($i in $items) {
@@ -426,6 +427,10 @@ while ($true) {
         $log = Get-ABJournal ([datetime]::MinValue)
         if ($log) { Start-Process -FilePath notepad.exe -ArgumentList "`"$($log.FullName)`"" }
         else { Write-LabWarn 'Aucun journal pour le moment.'; $null = Read-Host '  Entrée pour revenir au menu' }
+        continue
+    }
+    if ($item.Action -eq '#Particuliers') {
+        Start-Process -FilePath powershell.exe -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "' + (Join-Path $Root 'Menu-Particuliers.ps1') + '"')
         continue
     }
     Write-Host ''
