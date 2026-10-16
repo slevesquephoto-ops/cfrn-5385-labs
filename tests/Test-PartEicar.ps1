@@ -80,7 +80,7 @@ foreach ($vm in $VMs) {
     # --- SEC-EICAR-DEF : Defender actif ---
     Write-Host '--- SEC-EICAR-DEF' -ForegroundColor Cyan
     $row = [ordered]@{ VM = $vm; Panne = 'SEC-EICAR-DEF'; Tamper = $tamper }
-    $e1 = Invoke-Sonde $vm 'def-emp1' 'Empreinte' 'EMP'
+    # 1er cycle : installe (crée le client), Defender réagit, la tâche persiste, retrait
     $r = Invoke-Client $vm 'def-installer' @('-Panne', 'SEC-EICAR-DEF')
     $row.Installer = Mark ($r.Code -eq 0)
     $row.VerifPanne = Test-Verif $vm 'def-verif' @('SEC-EICAR-DEF')
@@ -93,6 +93,10 @@ foreach ($vm in $VMs) {
     $r = Invoke-Client $vm 'def-retirer' @('-Panne', 'SEC-EICAR-DEF', '-Retirer')
     $row.Retrait = Mark ($r.Code -eq 0)
     $row.VerifPropre = Test-Verif $vm 'def-verif2' @()
+    # 2e cycle : empreinte du retrait exact (le client existe déjà, base stable)
+    $e1 = Invoke-Sonde $vm 'def-emp1' 'Empreinte' 'EMP'
+    $null = Invoke-Client $vm 'def-installer2' @('-Panne', 'SEC-EICAR-DEF')
+    $null = Invoke-Client $vm 'def-retirer2' @('-Panne', 'SEC-EICAR-DEF', '-Retirer')
     $e2 = Invoke-Sonde $vm 'def-emp2' 'Empreinte' 'EMP'
     $row.Empreinte = Mark ((($e1 | Sort-Object) -join "`n") -eq (($e2 | Sort-Object) -join "`n"))
     $results += [pscustomobject]$row

@@ -26,9 +26,11 @@ $blocs = @{
     Tester = {
         param($Ctx)
         $null = $Ctx
+        # DEF vs TIERS : TIERS se distingue par la présence de l'exclusion Defender.
         $p = Test-PartEicarPersistence
         $excl = Test-PartDefenderExclusion
-        @{ Ok = (-not ($p.Tache -or $p.Generateur -or $excl)); Detail = "tâche: $($p.Tache), générateur: $($p.Generateur), exclusion: $excl" }
+        $present = (($p.Tache -or $p.Generateur) -and $excl)
+        @{ Ok = (-not $present); Detail = "tâche: $($p.Tache), générateur: $($p.Generateur), exclusion: $excl" }
     }
 }
 # Fermetures : les blocs gardent les variables de ce fichier quand le moteur les appelle

@@ -23,8 +23,12 @@ $blocs = @{
     Tester = {
         param($Ctx)
         $null = $Ctx
+        # DEF vs TIERS : même tâche, mais DEF n'ajoute PAS d'exclusion Defender (le dossier
+        # reste surveillé). On la distingue par l'absence d'exclusion.
         $p = Test-PartEicarPersistence
-        @{ Ok = (-not ($p.Tache -or $p.Generateur)); Detail = "tâche: $($p.Tache), générateur: $($p.Generateur)" }
+        $excl = Test-PartDefenderExclusion
+        $present = (($p.Tache -or $p.Generateur) -and -not $excl)
+        @{ Ok = (-not $present); Detail = "tâche: $($p.Tache), générateur: $($p.Generateur), exclusion: $excl" }
     }
 }
 # Fermetures : les blocs gardent les variables de ce fichier quand le moteur les appelle
