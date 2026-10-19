@@ -524,15 +524,20 @@ function Write-PartEicarFile {
 function Install-PartEicarPersistence {
     <# Dépose le générateur et une tâche planifiée (ouverture de session + toutes les 5 min, SYSTEM). #>
     $codes = (Get-PartEicarByte | ForEach-Object { [int]$_ }) -join ','
+    # Parenthèses OBLIGATOIRES autour des éléments concaténés : en PowerShell la virgule a une
+    # priorité plus haute que « + », donc sans parenthèses les éléments voisins sont happés dans
+    # une seule concaténation (tableau réduit à 1 élément collé par des espaces -> générateur
+    # écrit sur une seule ligne, syntaxe cassée, tâche en échec).
     $gen = @(
-        '$p = ''' + $script:EicarDrop + '''',
+        ('$p = ''' + $script:EicarDrop + ''''),
         '$d = Split-Path -Parent $p',
         'if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }',
-        '[IO.File]::WriteAllBytes($p, [byte[]]@(' + $codes + '))'
+        ('[IO.File]::WriteAllBytes($p, [byte[]]@(' + $codes + '))')
     )
     $dir = Split-Path -Parent $script:EicarGen
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    Set-Content -LiteralPath $script:EicarGen -Value $gen -Encoding ASCII
+    # Jointure CRLF explicite (indépendante du comportement de Set-Content sur un tableau).
+    [IO.File]::WriteAllText($script:EicarGen, (($gen -join "`r`n") + "`r`n"), (New-Object System.Text.ASCIIEncoding))
     (Get-Item -LiteralPath $script:EicarGen -Force).Attributes = 'Hidden'
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$($script:EicarGen)`""
     $t1 = New-ScheduledTaskTrigger -AtLogOn

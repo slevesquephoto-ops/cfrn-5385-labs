@@ -12,7 +12,7 @@ combiné et nettoyage du client. Rapports détaillés dans `tests/logs/` (non su
 | Pannes | PART-W10-T | PART-W11-T | Rapport |
 | --- | --- | --- | --- |
 | ACC-SOURIS, RES-PROXY, SYS-SON, RES-DNS, RES-HOSTS, RES-CARTE, RES-IP, RES-PAREFEU | OK | OK | 2026-10-13 |
-| SEC-EICAR-DEF, SEC-EICAR-TIERS | OK | OK | 2026-10-13 |
+| SEC-EICAR-DEF, SEC-EICAR-TIERS | présence/retrait OK (2026-10-13) ; **réapparition réparée + validée VM 2026-10-19** | idem | voir note |
 | STRAT-BUREAU, STRAT-PANNEAU, STRAT-ARRET, STRAT-CMD | OK | OK | 2026-10-14 |
 | SYS-SANSECHEC, SYS-DISQUE, SYS-RAM | OK | OK | 2026-10-16 |
 | SYS-REDEMARRAGE | installe OK ; **retrait corrigé** → à retester | à retester | 2026-10-16 |
@@ -32,16 +32,27 @@ combiné et nettoyage du client. Rapports détaillés dans `tests/logs/` (non su
   prend effet après fermeture puis réouverture de session.
 - **SEC-EICAR-TIERS** : l'exclusion Defender s'ajoute même avec la protection contre les
   falsifications active (constat W10 et W11, commit `eed298a`). Aucune préparation manuelle.
-- **SEC-EICAR-DEF/TIERS — répétition corrigée le 2026-10-16.** La tâche `Optimisation du stockage`
-  était enregistrée avec `-RepetitionInterval 5 min` **sans** `-RepetitionDuration` : PowerShell 5.1
-  l'enregistre (on la voit dans le Planificateur) mais « Prochaine exécution » reste vide et la
-  répétition ne démarre jamais. Constat enseignant : l'alerte Defender n'apparaissait **qu'une fois**
-  (le dépôt initial de l'installateur), jamais ensuite sur la session du client. Ajout de
-  `-RepetitionDuration (New-TimeSpan -Days 365)` (indéfini à l'échelle du labo). Le test automatisé
-  `Test-Particuliers` ne voyait pas le problème : il ne contrôle que présence/retrait via PowerShell
-  Direct, pas le vrai déclenchement dans le temps. **À retester à la main** : installer, ouvrir la
-  session du client, laisser tourner 5-6 min → l'EICAR doit réapparaître et Defender réalerter en
-  boucle (vérifier aussi « Prochaine exécution » non vide dans le Planificateur).
+- **SEC-EICAR-DEF/TIERS — réapparition réparée et VALIDÉE sur PART-W11-T le 2026-10-19.**
+  Symptôme signalé : à l'installation, l'EICAR est détecté une fois, puis **plus jamais** (tâche
+  pourtant visible dans le Planificateur), même après tout un week-end. Diagnostic mené sur la VM
+  (`tests/Invoke-LabVM.ps1`), **deux bugs cumulés** :
+  1. **Générateur malformé (cause principale).** `Install-PartEicarPersistence` construisait le script
+     générateur avec `$gen = @('…' + $EicarDrop + '…', '…', '…', '…(' + $codes + '…')`. En PowerShell,
+     **la virgule a une priorité plus haute que `+`** : les éléments voisins étaient happés dans une
+     seule concaténation, `$gen` se réduisait à **un seul élément** avec tout collé par des espaces.
+     Le fichier `sync-store.ps1` sortait sur UNE ligne → erreur de syntaxe (`Jeton inattendu « $d »`)
+     → l'action de la tâche échouait (`LastTaskResult=1`) à chaque exécution, donc aucune réapparition.
+     La seule alerte vue venait du dépôt direct de l'installateur (`[IO.File]::WriteAllBytes`, qui, lui,
+     marche). **Correctif** : parenthèses autour des éléments concaténés + écriture par
+     `[IO.File]::WriteAllText(($gen -join "\`r\`n"), ASCII)`.
+  2. **Répétition sans durée.** La tâche avait `-RepetitionInterval 5 min` **sans** `-RepetitionDuration` :
+     PS 5.1 l'enregistre mais « Prochaine exécution » reste vide et la répétition ne part pas. **Correctif** :
+     `-RepetitionDuration (New-TimeSpan -Days 365)`.
+  Après correctifs (constat VM) : `LastTaskResult=0`, l'EICAR est réécrit, Defender le détecte à chaque
+  cycle (`Virus:DOS/EICAR_Test_File`), « Prochaine exécution » renseignée (toutes les 5 min).
+  Pourquoi le test auto ne l'avait pas vu : `Test-Particuliers` ne contrôle que présence/retrait via
+  PowerShell Direct, jamais l'exécution réelle dans le temps. **À confirmer à la main** côté enseignant :
+  session du client ouverte, laisser tourner 5-6 min → alertes Defender en boucle.
 - Rappel de calibrage (voir SPEC) : viser une difficulté 3+. SYS-SON coupe le *service*
   audio — le panneau Son ne suffit pas, il faut `services.msc`.
 
