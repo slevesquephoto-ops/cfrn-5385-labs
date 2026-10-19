@@ -12,10 +12,10 @@ $blocs = @{
     }
     Installer = {
         param($Ctx, $Etat)
-        $null = $Ctx, $Etat
+        $null = $Etat
         Add-PartDefenderExclusion
-        Install-PartEicarPersistence
-        Write-PartEicarFile
+        Install-PartEicarPersistence -Compte $Ctx.Compte
+        Write-PartEicarFile -Compte $Ctx.Compte   # dépôt initial SEULEMENT si le client est au console
     }
     Retirer = {
         param($Ctx, $Etat)

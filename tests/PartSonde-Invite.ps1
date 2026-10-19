@@ -18,7 +18,7 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory)][ValidateSet('Empreinte', 'Comptes', 'Proxy', 'Marque', 'Profils', 'Redemarrer', 'Defender')][string]$Mode,
+    [Parameter(Mandatory)][ValidateSet('Empreinte', 'Comptes', 'Proxy', 'Marque', 'Profils', 'Redemarrer', 'Defender', 'EicarForceDrop', 'EicarGuard')][string]$Mode,
     [string]$Client = 'mbelanger'
 )
 
@@ -45,6 +45,21 @@ switch ($Mode) {
     'Redemarrer' {
         & shutdown.exe /r /t 5 /f
         'REDEMARRAGE|ok'
+    }
+    'EicarForceDrop' {
+        # Dépôt EICAR inconditionnel (hors garde console) : sert UNIQUEMENT à tester la réaction de
+        # l'antivirus / la survie du fichier. La garde « client seulement » est vérifiée par EicarGuard.
+        Write-PartEicarFile
+        "EICARDROP|$(Test-Path -LiteralPath (Join-Path $env:ProgramData 'MediaCache\update.bin'))"
+    }
+    'EicarGuard' {
+        # Exécute le générateur déposé TEL QUEL. Sous PowerShell Direct / ab-tech (pas le client au
+        # console), il ne doit RIEN déposer. On nettoie un éventuel dépôt préalable d'abord.
+        $drop = Join-Path $env:ProgramData 'MediaCache\update.bin'
+        if (Test-Path -LiteralPath $drop) { Remove-Item -LiteralPath $drop -Force -ErrorAction SilentlyContinue }
+        $gen = Join-Path $env:ProgramData 'Microsoft\DeviceSync\sync-store.ps1'
+        if (Test-Path -LiteralPath $gen) { & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $gen; Start-Sleep -Seconds 1 }
+        "EICARGUARD|$(Test-Path -LiteralPath $drop)"
     }
     'Defender' {
         try {

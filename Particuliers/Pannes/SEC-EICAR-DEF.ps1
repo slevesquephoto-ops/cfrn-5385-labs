@@ -11,9 +11,9 @@ $blocs = @{
     }
     Installer = {
         param($Ctx, $Etat)
-        $null = $Ctx, $Etat
-        Install-PartEicarPersistence
-        Write-PartEicarFile   # premier dépôt; Defender le détectera, la tâche le remet
+        $null = $Etat
+        Install-PartEicarPersistence -Compte $Ctx.Compte
+        Write-PartEicarFile -Compte $Ctx.Compte   # dépôt initial SEULEMENT si le client est au console
     }
     Retirer = {
         param($Ctx, $Etat)

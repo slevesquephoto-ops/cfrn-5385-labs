@@ -84,6 +84,11 @@ foreach ($vm in $VMs) {
     $r = Invoke-Client $vm 'def-installer' @('-Panne', 'SEC-EICAR-DEF')
     $row.Installer = Mark ($r.Code -eq 0)
     $row.VerifPanne = Test-Verif $vm 'def-verif' @('SEC-EICAR-DEF')
+    # Garde : sous ab-tech (PowerShell Direct, pas le client au console) le générateur ne dépose RIEN.
+    $g = Invoke-Sonde $vm 'def-garde' 'EicarGuard' 'EICARGUARD'
+    $row.Garde = Mark ((@($g)[0] -split '\|')[1] -eq 'False')
+    # Dépôt forcé (hors garde) : vérifie que Defender réagit bien à l'EICAR dans ce dossier.
+    $null = Invoke-Sonde $vm 'def-forcedrop' 'EicarForceDrop' 'EICARDROP'
     $d1 = Invoke-Sonde $vm 'def-sonde1' 'Defender' 'DEF'
     Start-Sleep -Seconds 25
     $d2 = Invoke-Sonde $vm 'def-sonde2' 'Defender' 'DEF'
@@ -109,10 +114,15 @@ foreach ($vm in $VMs) {
     $r = Invoke-Client $vm 'tiers-installer' @('-Panne', 'SEC-EICAR-TIERS')
     if ($r.Code -ne 0 -and ($r.Output -match 'falsifications')) {
         $row.Installer = 'BLOQUÉ (protection falsifications)'
-        $row.VerifPanne = 'n/a'; $row.FichierSurvit = 'n/a'; $row.Retrait = 'n/a'; $row.VerifPropre = 'n/a'; $row.Empreinte = 'n/a'
+        $row.VerifPanne = 'n/a'; $row.Garde = 'n/a'; $row.FichierSurvit = 'n/a'; $row.Retrait = 'n/a'; $row.VerifPropre = 'n/a'; $row.Empreinte = 'n/a'
     } else {
         $row.Installer = Mark ($r.Code -eq 0)
         $row.VerifPanne = Test-Verif $vm 'tiers-verif' @('SEC-EICAR-TIERS')
+        # Garde : sous ab-tech, le générateur ne dépose rien (même logique que DEF).
+        $g = Invoke-Sonde $vm 'tiers-garde' 'EicarGuard' 'EICARGUARD'
+        $row.Garde = Mark ((@($g)[0] -split '\|')[1] -eq 'False')
+        # Dépôt forcé (hors garde) : le dossier étant exclu de Defender, le fichier doit SURVIVRE.
+        $null = Invoke-Sonde $vm 'tiers-forcedrop' 'EicarForceDrop' 'EICARDROP'
         Start-Sleep -Seconds 25
         $d = Invoke-Sonde $vm 'tiers-sonde' 'Defender' 'DEF'
         $row.FichierSurvit = Mark ((Field $d 'drop') -eq 'True' -and (Field $d 'exclusion') -eq 'True')
@@ -128,10 +138,10 @@ foreach ($vm in $VMs) {
 }
 
 $results | Format-Table -AutoSize -Wrap | Out-String -Width 250 | Write-Host
-$md = @("# Test-PartEicar ($Stamp), client $Client", '', '| VM | Panne | Tamper | Installer | Vérif. panne | Persistance | Defender voit | Fichier survit | Retrait | Vérif. propre | Empreinte |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |')
+$md = @("# Test-PartEicar ($Stamp), client $Client", '', '| VM | Panne | Tamper | Installer | Vérif. panne | Garde ab-tech | Persistance | Defender voit | Fichier survit | Retrait | Vérif. propre | Empreinte |', '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |')
 foreach ($r in $results) {
     $f = { param($n) if ($r.PSObject.Properties[$n]) { $r.$n } else { '' } }
-    $md += "| $($r.VM) | $($r.Panne) | $($r.Tamper) | $($r.Installer) | $($r.VerifPanne) | $(& $f 'Persistance') | $(& $f 'DefenderVoit') | $(& $f 'FichierSurvit') | $($r.Retrait) | $($r.VerifPropre) | $($r.Empreinte) |"
+    $md += "| $($r.VM) | $($r.Panne) | $($r.Tamper) | $($r.Installer) | $($r.VerifPanne) | $(& $f 'Garde') | $(& $f 'Persistance') | $(& $f 'DefenderVoit') | $(& $f 'FichierSurvit') | $($r.Retrait) | $($r.VerifPropre) | $($r.Empreinte) |"
 }
 $md | Set-Content -Path (Join-Path $LogDir 'resultats.md') -Encoding UTF8
 Write-Host "Journaux : $LogDir"

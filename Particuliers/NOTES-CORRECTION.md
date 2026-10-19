@@ -53,6 +53,24 @@ combiné et nettoyage du client. Rapports détaillés dans `tests/logs/` (non su
   Pourquoi le test auto ne l'avait pas vu : `Test-Particuliers` ne contrôle que présence/retrait via
   PowerShell Direct, jamais l'exécution réelle dans le temps. **À confirmer à la main** côté enseignant :
   session du client ouverte, laisser tourner 5-6 min → alertes Defender en boucle.
+- **SEC-EICAR — ciblage client + escalade (2026-10-19, validé PART-W11-T).** À la demande de
+  l'enseignant :
+  - **Cadence** : répétition portée à **1 minute** (`$script:EicarIntervalMinutes` dans le module,
+    ajustable).
+  - **Jamais sous ab-tech.** Le générateur (SYSTEM) ne dépose l'EICAR que si l'utilisateur de la
+    session **console active** est le client (`Win32_ComputerSystem.UserName`). Sous ab-tech, écran de
+    verrouillage ou session réseau → **no-op**. Le dépôt initial (`Write-PartEicarFile -Compte`) suit
+    la même garde : installer depuis ab-tech ne déclenche aucune alerte. Constat VM : console =
+    `PART-W11\ab-tech` → aucun dépôt. (On a retiré le déclencheur `-AtLogOn -User <client>` : il
+    exigeait un compte résoluble à l'installation ; la garde dans l'action suffit au ciblage.)
+  - **Escalade douce si l'élève traîne.** Un compteur discret (`index.dat` dans le dossier de dépôt)
+    compte les cycles passés DANS la session du client ; après 5 cycles, le générateur dépose
+    plusieurs copies (`update.bin`, `update1.bin`, … **plafonné à 4**) pour densifier les alertes.
+    Tout reste dans le même dossier caché ; le retrait supprime le dossier **récursivement** (copies +
+    compteur). Rien de nuisible : toujours le fichier de test EICAR standard (68 octets). Constat VM :
+    cycles 1-5 = 1 copie, 6 = 2, 7 = 3 ; Defender détecte la rafale.
+  - **Discrétion** : tâche et script générateur `Hidden`, noms anodins (`Optimisation du stockage`,
+    `MediaCache`, `DeviceSync`). La tâche n'apparaît qu'en cochant « Afficher les tâches cachées ».
 - Rappel de calibrage (voir SPEC) : viser une difficulté 3+. SYS-SON coupe le *service*
   audio — le panneau Son ne suffit pas, il faut `services.msc`.
 

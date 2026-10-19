@@ -500,6 +500,17 @@ function Get-PartVerification {
 $script:EicarTask = 'Optimisation du stockage'
 $script:EicarGen = Join-Path $env:ProgramData 'Microsoft\DeviceSync\sync-store.ps1'
 $script:EicarDrop = Join-Path $env:ProgramData 'MediaCache\update.bin'
+$script:EicarIntervalMinutes = 1   # cadence de réapparition (l'enseignant peut ajuster)
+
+function Test-PartConsoleUserIs {
+    <# Vrai si l'utilisateur de la session console active est $Compte (nom court, insensible à la
+       casse). Sert à ne jamais déposer l'EICAR sous un autre profil que le client (ex. ab-tech).
+       Renvoie faux si personne n'est au console (écran de verrouillage, session réseau). #>
+    param([Parameter(Mandatory)][string]$Compte)
+    try { $u = (Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).UserName } catch { return $false }
+    if (-not $u) { return $false }
+    return ((($u -split '\\')[-1]) -ieq $Compte)
+}
 
 function Get-PartEicarByte {
     <#
@@ -516,37 +527,66 @@ function Get-PartEicarByte {
 function Get-PartEicarDropFolder { return (Split-Path -Parent $script:EicarDrop) }
 
 function Write-PartEicarFile {
+    <# Dépôt initial. Si $Compte est fourni, on ne dépose QUE si le client est l'utilisateur
+       console actif : l'enseignant qui installe depuis ab-tech ne déclenche donc aucune alerte. #>
+    param([string]$Compte)
+    if ($Compte -and -not (Test-PartConsoleUserIs -Compte $Compte)) { return }
     $dir = Get-PartEicarDropFolder
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     [IO.File]::WriteAllBytes($script:EicarDrop, (Get-PartEicarByte))
 }
 
 function Install-PartEicarPersistence {
-    <# Dépose le générateur et une tâche planifiée (ouverture de session + toutes les 5 min, SYSTEM). #>
+    <#
+    Dépose le générateur (script caché) et une tâche planifiée (SYSTEM). Le générateur est écrit
+    comme un here-string (chaîne unique avec vrais retours de ligne : aucun piège de tableau).
+
+    Portée client : le générateur ne fait RIEN si l'utilisateur de la session console active n'est
+    pas $Compte. Ab-tech (ou l'écran de verrouillage) ne voit donc jamais l'EICAR, même si la tâche
+    SYSTEM tourne en fond.
+
+    Escalade douce : un compteur discret (index.dat) compte les cycles passés DANS la session du
+    client ; après 5 cycles, le générateur dépose plusieurs copies (plafonné à 4) pour densifier les
+    alertes si l'élève traîne. Tout reste dans le même dossier caché (retrait = suppression du dossier).
+    #>
+    param([Parameter(Mandatory)][string]$Compte)
     $codes = (Get-PartEicarByte | ForEach-Object { [int]$_ }) -join ','
-    # Parenthèses OBLIGATOIRES autour des éléments concaténés : en PowerShell la virgule a une
-    # priorité plus haute que « + », donc sans parenthèses les éléments voisins sont happés dans
-    # une seule concaténation (tableau réduit à 1 élément collé par des espaces -> générateur
-    # écrit sur une seule ligne, syntaxe cassée, tâche en échec).
-    $gen = @(
-        ('$p = ''' + $script:EicarDrop + ''''),
-        '$d = Split-Path -Parent $p',
-        'if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }',
-        ('[IO.File]::WriteAllBytes($p, [byte[]]@(' + $codes + '))')
-    )
+    $dropDir = Get-PartEicarDropFolder
+    # Here-string : $Compte / $dropDir / $codes sont injectés à l'installation ; tout le reste
+    # (préfixé d'un accent grave) reste littéral et s'exécute au moment de la tâche.
+    $gen = @"
+`$client = '$Compte'
+try { `$u = (Get-CimInstance Win32_ComputerSystem -ErrorAction Stop).UserName } catch { `$u = `$null }
+if (-not `$u) { return }
+if (((`$u -split '\\')[-1]) -ine `$client) { return }
+`$d = '$dropDir'
+if (-not (Test-Path -LiteralPath `$d)) { New-Item -ItemType Directory -Path `$d -Force | Out-Null }
+`$cf = Join-Path `$d 'index.dat'
+`$n = 0
+if (Test-Path -LiteralPath `$cf) { `$raw = (Get-Content -LiteralPath `$cf -ErrorAction SilentlyContinue | Select-Object -First 1); [void][int]::TryParse(`$raw, [ref]`$n) }
+`$n++
+Set-Content -LiteralPath `$cf -Value `$n -Encoding ASCII
+`$copies = 1
+if (`$n -gt 5) { `$copies = [Math]::Min(4, `$n - 4) }
+`$bytes = [byte[]]@($codes)
+for (`$i = 0; `$i -lt `$copies; `$i++) {
+    if (`$i -eq 0) { `$f = Join-Path `$d 'update.bin' } else { `$f = Join-Path `$d ('update' + `$i + '.bin') }
+    [IO.File]::WriteAllBytes(`$f, `$bytes)
+}
+"@
     $dir = Split-Path -Parent $script:EicarGen
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    # Jointure CRLF explicite (indépendante du comportement de Set-Content sur un tableau).
-    [IO.File]::WriteAllText($script:EicarGen, (($gen -join "`r`n") + "`r`n"), (New-Object System.Text.ASCIIEncoding))
+    [IO.File]::WriteAllText($script:EicarGen, $gen, (New-Object System.Text.ASCIIEncoding))
     (Get-Item -LiteralPath $script:EicarGen -Force).Attributes = 'Hidden'
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$($script:EicarGen)`""
-    $t1 = New-ScheduledTaskTrigger -AtLogOn
-    # -RepetitionDuration est OBLIGATOIRE : sans elle, PowerShell 5.1 enregistre la tâche mais la
-    # répétition ne démarre jamais (« Prochaine exécution » vide). 365 jours = indéfini pour le labo.
-    $t2 = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 365)
+    # Un seul déclencheur : répétition SYSTEM toutes les N minutes. Le ciblage « client uniquement »
+    # est assuré par la GARDE dans l'action (pas par un déclencheur -User, qui exigerait que le compte
+    # soit résoluble à l'installation). -RepetitionDuration est obligatoire, sinon « Prochaine
+    # exécution » reste vide et la répétition ne démarre pas.
+    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes $script:EicarIntervalMinutes) -RepetitionDuration (New-TimeSpan -Days 365)
     $pr = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
     $set = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-    Register-ScheduledTask -TaskName $script:EicarTask -Action $action -Trigger $t1, $t2 -Principal $pr -Settings $set -Force | Out-Null
+    Register-ScheduledTask -TaskName $script:EicarTask -Action $action -Trigger $trigger -Principal $pr -Settings $set -Force | Out-Null
 }
 
 function Remove-PartEicarPersistence {
@@ -555,9 +595,10 @@ function Remove-PartEicarPersistence {
     if (Test-Path -LiteralPath $script:EicarGen) { Remove-Item -LiteralPath $script:EicarGen -Force }
     $gdir = Split-Path -Parent $script:EicarGen
     if ((Test-Path -LiteralPath $gdir) -and -not @(Get-ChildItem -LiteralPath $gdir -Force)) { Remove-Item -LiteralPath $gdir -Force }
-    if (Test-Path -LiteralPath $script:EicarDrop) { Remove-Item -LiteralPath $script:EicarDrop -Force -ErrorAction SilentlyContinue }
+    # Suppression récursive du dossier de dépôt : il nous appartient entièrement et peut contenir
+    # plusieurs copies (update*.bin) plus le compteur index.dat.
     $ddir = Get-PartEicarDropFolder
-    if ((Test-Path -LiteralPath $ddir) -and -not @(Get-ChildItem -LiteralPath $ddir -Force)) { Remove-Item -LiteralPath $ddir -Force }
+    if (Test-Path -LiteralPath $ddir) { Remove-Item -LiteralPath $ddir -Recurse -Force -ErrorAction SilentlyContinue }
 }
 
 function Test-PartEicarPersistence {
