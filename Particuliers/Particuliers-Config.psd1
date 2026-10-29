@@ -5,9 +5,11 @@
     # Les mots de passe sont fictifs et documentés dans README-Clients.txt.
     # =======================================================================
 
-    # Compte de l'enseignant (console, PowerShell Direct). Doit exister, être administrateur
-    # et activé avant qu'un client soit placé : les comptes sans mot de passe sont alors désactivés.
-    Administrateur = 'ab-tech'
+    # Compte administrateur « enseignant » à préserver (jamais désactivé : accès de secours
+    # quand une panne punitive bloque la session du client). Vide ou 'auto' => le compte qui
+    # exécute Client.ps1 en élévation est utilisé (quel que soit le poste, plus besoin d'ab-tech).
+    # Mettre un nom précis ici force ce compte local (il doit exister, être activé et administrateur).
+    Administrateur = ''
 
     # Admin = $true : le client est administrateur de son ordinateur (cas typique d'un particulier).
     # Mot de passe « prénom + année + ! » : réaliste, et conforme à la politique AB (12, complexe)

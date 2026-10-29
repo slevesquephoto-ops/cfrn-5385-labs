@@ -144,13 +144,34 @@ function Get-PartFirstLogonPolicy {
     )
 }
 
-function Assert-PartAdministrateur {
-    <# L'enseignant doit garder un accès : compte administrateur activé, avec mot de passe. #>
+function Get-PartAdministrateur {
+    <# Nom court du compte administrateur « enseignant » à préserver (jamais désactivé : c'est
+       l'accès de secours quand une panne punitive bloque la session du client). Si la config
+       nomme un compte, on le prend ; sinon (valeur vide ou 'auto'), on prend le compte qui
+       exécute ce script en élévation — l'enseignant lui-même, quel que soit le poste. #>
     $name = (Get-PartConfig).Administrateur
+    if ($name -and $name -ne 'auto') { return $name }
+    $cur = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    return ($cur -split '\\')[-1]
+}
+
+function Assert-PartAdministrateur {
+    <# L'enseignant doit garder un accès administrateur. Compte local (nommé ou auto-détecté) :
+       on vérifie qu'il est activé et administrateur. Compte non local (domaine, compte
+       Microsoft) : on s'assure que la session courante est bien élevée en administrateur —
+       c'est l'accès de secours de l'enseignant. #>
+    $name = Get-PartAdministrateur
     $u = Get-LocalUser -Name $name -ErrorAction SilentlyContinue
-    if (-not $u -or -not $u.Enabled) { throw "Compte $name absent ou désactivé : le créer (administrateur, mot de passe LAB) avant de placer un client." }
-    $admins = (Get-ABSid -Name 'Administrateurs').Value
-    if ((Get-ABGroupMemberSid -GroupSid $admins) -notcontains $u.SID.Value) { throw "$name n'est pas administrateur : impossible de placer un client sans risque." }
+    if ($u) {
+        if (-not $u.Enabled) { throw "Compte $name désactivé : le réactiver (administrateur) avant de placer un client." }
+        $admins = (Get-ABSid -Name 'Administrateurs').Value
+        if ((Get-ABGroupMemberSid -GroupSid $admins) -notcontains $u.SID.Value) { throw "$name n'est pas administrateur : impossible de placer un client sans risque." }
+        return
+    }
+    $principal = New-Object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent())
+    if (-not $principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw "Aucun compte administrateur de secours : lancer depuis une session administrateur de l'enseignant, ou nommer un compte dans Particuliers-Config.psd1 (clé Administrateur)."
+    }
 }
 
 function Initialize-PartPoste {
@@ -162,7 +183,7 @@ function Initialize-PartPoste {
     if (Get-LabState -Scenario $script:PosteState) { return }
     Assert-PartAdministrateur
     $cfg = Get-PartConfig
-    $exclus = @($cfg.Administrateur) + @($cfg.Clients | ForEach-Object { $_.Compte })
+    $exclus = @(Get-PartAdministrateur) + @($cfg.Clients | ForEach-Object { $_.Compte })
     $vides = @(Get-LocalUser | Where-Object { $_.Enabled -and $exclus -notcontains $_.Name } |
             Where-Object { Test-PartBlankPassword -UserName $_.Name } | ForEach-Object { $_.Name })
     $snaps = @(Get-PartFirstLogonPolicy | ForEach-Object { Get-LabRegistrySnapshot -Path $_.Path -Name $_.Name })
@@ -191,8 +212,9 @@ function Test-PartPoste {
     $st = Get-LabState -Scenario $script:PosteState
     if (-not $st) { return (New-LabCheck -Name 'poste' -Passed $false -Detail 'poste jamais préparé (aucun client placé)') }
     $p = @()
-    $u = Get-LocalUser -Name (Get-PartConfig).Administrateur -ErrorAction SilentlyContinue
-    if (-not $u -or -not $u.Enabled) { $p += "$((Get-PartConfig).Administrateur) absent ou désactivé" }
+    $admin = Get-PartAdministrateur
+    $u = Get-LocalUser -Name $admin -ErrorAction SilentlyContinue
+    if ($u -and -not $u.Enabled) { $p += "$admin désactivé" }
     foreach ($n in @($st.ComptesDesactives)) {
         $x = Get-LocalUser -Name $n -ErrorAction SilentlyContinue
         if ($x -and $x.Enabled) { $p += "$n (sans mot de passe) réactivé" }
