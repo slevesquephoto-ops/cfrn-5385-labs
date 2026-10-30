@@ -238,6 +238,25 @@
             Incompatibles = @()
         }
 
+        # --- Démarrage pré-système (hors-système) : la machine ne démarre plus sur Windows. ---
+        # Catégorie BOOT-* : installation scriptable, mais une fois active, PowerShell Direct et le
+        # moteur ne peuvent plus agir (ni retirer ni vérifier depuis l'OS). Réparation en Windows RE.
+        # À DONNER SEULE : incompatible avec toutes les autres pannes (machine non démarrable).
+        @{
+            Id = 'BOOT-BCD'; Titre = 'Ne démarre plus sur Windows (BCD corrompu)'; Portee = 'Machine'; Duree = '25 / 40'; Difficulte = 5
+            Recit = 'Quand j''allume mon ordinateur, je n''arrive plus à atteindre Windows : j''ai un écran bleu avec un message et un code d''erreur, et ça ne va pas plus loin.'
+            Cause = 'Entrée {default} du BCD : réparation automatique coupée (recoveryenabled No) ET chemin du chargeur (path) faussé, donc winload est introuvable au démarrage (écran Récupération, code 0xc000000f - fichier manquant) et cet écran reste affiché. Le disque et Windows sont intacts.'
+            Correction = 'Démarrer dans Windows RE (média d''installation / clé de récupération) > Réparation du démarrage. Sinon, invite de commandes : bootrec /scanos puis bootrec /rebuildbcd, ou bcdedit /set {default} path \Windows\system32\winload.efi (.exe en BIOS hérité) ET bcdedit /set {default} recoveryenabled Yes. Panne LOGICIELLE : à ne pas confondre avec un disque défaillant.'
+            Incompatibles = @(
+                'ACC-SOURIS', 'ACC-CLAVIER', 'ACC-FILTRES', 'RES-PROXY', 'SYS-SON', 'RES-DNS', 'RES-HOSTS',
+                'RES-CARTE', 'RES-IP', 'RES-PAREFEU', 'RES-DUPLEX', 'SEC-EICAR-DEF', 'SEC-EICAR-TIERS',
+                'SEC-BOUCLE', 'NAV-PIRATE', 'PUP-FAUX', 'SEC-EXCL', 'CPT-MDP', 'CPT-ADMIN', 'FIC-CACHES',
+                'FIC-REDIR', 'CPT-TEMP', 'SYS-IMPRIM', 'SYS-SANSECHEC', 'SYS-HEURE', 'SYS-DISQUE',
+                'SYS-DEMARRAGE', 'SYS-USB', 'SYS-RAM', 'SYS-REDEMARRAGE', 'STRAT-BUREAU', 'STRAT-PANNEAU',
+                'STRAT-ARRET', 'STRAT-CMD', 'STRAT-RUN', 'STRAT-TASKMGR'
+            )
+        }
+
         # --- Restrictions par stratégie (restes d'un faux « optimiseur » ou « contrôle parental ») ---
         # Portée Profil : valeurs de stratégie dans la ruche du client. La correction passe par
         # gpedit.msc ou le registre (pas un simple réglage), d'où une difficulté plus élevée.

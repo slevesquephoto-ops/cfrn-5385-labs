@@ -111,6 +111,54 @@ script générateur ne portent la signature (seul le fichier déposé déclenche
 | SYS-RAM | « Mon PC rame, je ne vois que 3 Go sur 16. » | Mémoire maximale bridée au démarrage (`bcdedit truncatememory`, comme msconfig); plancher 3072 Mo | M | 15 / 20 |
 | SYS-REDEMARRAGE | « Mon PC redémarre tout seul peu après l'ouverture de session. » | Tâche déclenchée au logon **du client** qui lance `shutdown /r`. Punitif : réparer depuis un autre compte ou Windows RE | M | 15 / 25 |
 
+### Démarrage pré-système (pannes « hors-système »)
+
+Nouvelle catégorie. Symptôme partagé, raconté presque pareil par le client :
+**« Je n'arrive plus à atteindre Windows au démarrage. »** Plusieurs causes possibles
+derrière le même écran d'échec — c'est tout l'intérêt pédagogique (même symptôme,
+diagnostic différent). Préfixe `BOOT-`.
+
+Ces pannes sont d'une **nature différente** des autres : une fois actives, la machine ne
+démarre plus sur Windows, donc **PowerShell Direct et le moteur ne peuvent plus agir** (ni
+retirer, ni vérifier depuis l'OS). Règles valables pour toute panne `BOOT-` :
+
+- **Installation** : scriptable normalement (prend effet au prochain démarrage). La panne
+  **sauvegarde l'état d'origine** (snapshot BCD) avant de le modifier, comme les autres
+  (retrait exact).
+- **Retrait** : le bloc `Retirer` restaure l'état exact, mais il n'est exécutable que
+  **tant que l'OS démarre encore** (avant reboot) ou **depuis Windows RE** (store BCD hors
+  ligne). En usage réel, le retrait **est l'exercice de l'élève, en WinRE**.
+- **Garde-fou obligatoire** : ne jamais rendre la machine **irrécupérable** (pas de
+  suppression du store BCD complet, pas de wipe de la partition WinRE, pas de BitLocker).
+  WinRE doit rester joignable par média d'installation / clé de récupération. En revanche,
+  désactiver la **réparation automatique** (`recoveryenabled No`) est permis et même
+  nécessaire : sans ça, Windows répare le BCD tout seul au démarrage suivant et la panne se
+  soigne d'elle-même (constat VM). C'est ce qui force l'élève à réparer à la main.
+- **Vérification en VM** : on contrôle seulement la **configuration** (lecture du BCD avant
+  reboot), comme SYS-SANSECHEC et SYS-HEURE.
+- **Test réel du symptôme** : installer → redémarrer la VM → `Capture` (capture d'écran)
+  pour confirmer l'écran d'erreur / l'entrée WinRE → `Reset` au point `Propre`. La boucle
+  automatique install→vérif→retrait→vérif **ne s'applique pas**.
+- **Portée M, incompatible avec tout** (machine non démarrable) : **à donner seule**, comme
+  CPT-TEMP.
+
+| ID | Ce que dit le client | Cause installée | Portée | Durée |
+| --- | --- | --- | --- | --- |
+| BOOT-BCD | « Quand j'allume, je n'atteins plus Windows : un écran bleu avec un code d'erreur, ça n'avance pas. » | Entrée `{default}` du BCD : réparation automatique coupée (`recoveryenabled No`) **et** chemin du chargeur (`path`) faussé → `winload` introuvable au démarrage (écran « Récupération », code `0xc000000f` — fichier manquant), qui reste affiché. Réparation en Windows RE | M | 25 / 40 — *hors-système : vérif. config en VM, symptôme réel (OS bloqué) confirmé en VM* |
+
+Correction attendue (BOOT-BCD) : démarrer dans **Windows RE** (média d'installation / clé de
+récupération ; la réparation auto étant coupée, elle ne part plus seule) → **Réparation du
+démarrage**. Si insuffisant, invite de commandes WinRE : `bootrec /scanos` puis
+`bootrec /rebuildbcd`, ou `bcdedit /set {default} path \Windows\system32\winload.efi` (`.exe`
+en BIOS hérité) **et** `bcdedit /set {default} recoveryenabled Yes`. À distinguer d'une panne
+matérielle (disque absent) : ici le disque et Windows sont intacts, seule l'entrée de démarrage
+est fausse.
+
+Membres à venir de la même famille (même récit, autre cause — **non spécifiés, à caler plus
+tard**) : p. ex. entrée `{default}` **supprimée** (`bootrec /rebuildbcd`), fichier de
+démarrage introuvable, ou sélection de démarrage faussée. Chacun s'ajoutera comme une ligne
+`BOOT-<…>` quand tu voudras.
+
 ### Compte et fichiers
 
 | ID | Ce que dit le client | Cause installée | Portée | Durée |
@@ -152,6 +200,8 @@ Restes d'un faux « optimiseur » ou « contrôle parental » installé par le c
 - CPT-TEMP masque les autres pannes de profil : à donner seule.
 - SYS-SANSECHEC désactive le son, l'impression et le réseau selon le mode. Ne pas la
   combiner à SYS-SON, SYS-IMPRIM ou à une panne réseau.
+- Pannes `BOOT-*` (démarrage pré-système) : machine non démarrable → **à donner seules**,
+  incompatibles avec toutes les autres pannes.
 
 ### Exclues
 
@@ -241,6 +291,9 @@ Sous-menu :
   - **SYS-SANSECHEC** : PowerShell Direct ne répond peut-être plus en mode sans échec.
     On teste seulement la configuration de démarrage, sans redémarrer.
   - **SYS-SON** : pas de carte son. On contrôle seulement l'état du service.
+  - **BOOT-*** (ex. BOOT-BCD) : hors-système. On ne vérifie que la configuration de
+    démarrage (BCD) avant reboot; le symptôme réel se confirme par `Capture` après
+    redémarrage, puis `Reset`. Pas de boucle automatique install→vérif→retrait→vérif.
 
 ## Ordre de travail
 

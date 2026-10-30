@@ -23,6 +23,7 @@ combiné et nettoyage du client. Rapports détaillés dans `tests/logs/` (non su
 | NAV-PIRATE, PUP-FAUX, SEC-EXCL | à tester | à tester | — |
 | RES-DUPLEX | s.o. (vrai matériel) — refus propre en VM constaté 2026-10-16 | s.o. (vrai matériel) | — |
 | CPT-TEMP (à donner SEULE) | à tester | à tester | — |
+| BOOT-BCD (à donner SEULE) | **validée VM 2026-10-30** (install/vérif/retrait/empreinte + symptôme réel) | idem | voir note |
 
 ## Points d'attention
 
@@ -188,6 +189,43 @@ dans le poste.
   SYS-HEURE (logicielle) se répare en **réactivant la synchro** et ne bougerait pas si on changeait la
   pile. L'élève doit reconnaître lequel des deux cas il a devant lui (l'heure qui *revient* fausse après
   extinction = pile; l'heure fausse mais *stable* avec synchro coupée = logiciel).
+
+## BOOT-BCD (démarrage pré-système) — validée en VM le 2026-10-30
+
+Première panne de la catégorie « hors-système » (préfixe `BOOT-`) : la machine ne démarre plus
+sur Windows, réparation en Windows RE. **À DONNER SEULE** (incompatible avec les 36 autres).
+
+Mécanisme : on agit sur l'entrée `{default}` du BCD (snapshot + restauration exacte des deux
+valeurs) :
+1. `recoveryenabled No` — coupe la **réparation automatique** de Windows ;
+2. `path ...\winload.efi.bak` — chemin du chargeur faux → `winload` introuvable au démarrage.
+
+Écran constaté en VM : « Récupération — Votre PC/périphérique doit être réparé », `Fichier :
+\WINDOWS\system32\winload.efi.bak`, `Code d'erreur : 0xc000000f`, avec les options Échap
+(récupération) / Entrée (réessayer) / F8. Capture : `tests/logs/PART-W11-T/` (non suivi par git).
+
+**Découverte importante (constat VM).** Fausser **seulement** le `path` ne suffit PAS : au
+démarrage suivant, Windows détecte l'échec, lance la Réparation automatique (WinRE), **répare le
+BCD tout seul** (remet `path` à `winload.efi`) et redémarre — en ~40 s, sans intervention. La
+panne se soignait d'elle-même (sondes VM : OS injoignable à T+25 s, puis de nouveau joignable et
+`path` restauré à T+50 s). C'est `recoveryenabled No` qui empêche cette auto-réparation et laisse
+l'écran de récupération affiché : l'élève **doit** réparer à la main. On a donc révisé le
+garde-fou de la catégorie : désactiver la réparation **automatique** est permis et voulu ; ce qui
+reste interdit, c'est de rendre la machine **irrécupérable** (pas de suppression du store BCD, pas
+de wipe de la partition WinRE, pas de BitLocker). WinRE reste joignable par média.
+
+Correction attendue de l'élève : Windows RE (média d'installation / clé de récupération) >
+Réparation du démarrage ; sinon invite de commandes : `bootrec /scanos` puis `bootrec /rebuildbcd`,
+ou `bcdedit /set {default} path \Windows\system32\winload.efi` (`.exe` en BIOS hérité) **et**
+`bcdedit /set {default} recoveryenabled Yes`.
+
+Validation VM (PART-W11-T, 2026-10-30), méthode propre à la catégorie (pas de boucle automatique) :
+- **Phase A (moteur, sans reboot)** : install OK ; Verifier **Panne** (`echecs=[BOOT-BCD]`) OK ;
+  sonde = `path=winload.efi.bak`, `recoveryenabled=No` ; retrait OK ; Verifier **Propre** OK ;
+  **empreinte exacte** : `path=winload.efi`, `recoveryenabled=Yes` identiques avant/après.
+- **Phase B (symptôme réel)** : install + reboot → **0/6 sondes sur 150 s** : l'OS reste bloqué
+  avant Windows (écran de récupération). `Reset` au point `Propre` remet la VM d'aplomb (filet de
+  l'enseignant en VM ; sur vrai matériel, c'est la réparation WinRE de l'élève).
 
 ## Idée en attente
 
