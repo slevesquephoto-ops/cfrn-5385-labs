@@ -45,6 +45,25 @@ choisit, sur n'importe quel poste du labo, **un client et une ou plusieurs panne
 - Copie des données : seulement les fichiers absents (jamais d'écrasement d'un profil
   existant).
 
+### Profil crédible (enrichissement)
+
+Au-delà des données, le profil du client est rendu crédible à sa création
+(`Set-PartClientProfileExtras`, réutilise la mécanique AB). Champs par client dans la config :
+
+- `FondEcran` : chemin précis, sinon une image Windows intégrée choisie de façon déterministe
+  par compte (différente d'un client à l'autre).
+- `Raccourcis` (Bureau) : `@{ Nom; Cible }` où `Cible` vaut `EDGE`, `LIBREOFFICE` (logiciel
+  **réel**, raccourci sauté s'il est absent) ou un chemin avec le jeton `%PROFIL%`.
+- `Favoris` : marque-pages Edge (`@{ Nom; Url }`) écrits dans le fichier `Bookmarks` du profil.
+  Sites neutres uniquement (règle du dépôt). Jamais écrasés s'ils existent déjà.
+- `Logiciels` (mixte) : **réels** = raccourcis vers l'existant (Edge, LibreOffice) ; **simulés**
+  = `@{ Id; Nom; Version; Editeur }` → entrée « Applications installées » (HKCU Uninstall),
+  dossier d'installation et raccourci menu Démarrer, tous **dans le profil** (inoffensifs,
+  retirés avec le client). Aucun gros installeur réseau.
+
+Les données sont générées par `tools/New-PartData.ps1 -Compte <compte>` (textes légers + photos
+d'espace réservé, aucune personne réelle) et committées dans `data/<compte>/` avec le manifeste.
+
 ## Catalogue des pannes
 
 Portée : **M** = toute la machine, **P** = profil du client. Durées : rapide / normal.

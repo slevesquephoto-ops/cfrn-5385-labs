@@ -227,6 +227,24 @@ Validation VM (PART-W11-T, 2026-10-30), méthode propre à la catégorie (pas de
   avant Windows (écran de récupération). `Reset` au point `Propre` remet la VM d'aplomb (filet de
   l'enseignant en VM ; sur vrai matériel, c'est la réparation WinRE de l'élève).
 
+## Profil crédible des clients — Monique validée en VM le 2026-10-30
+
+Enrichissement du profil au-delà des données (`Set-PartClientProfileExtras`, réutilise la
+mécanique AB : ruche, fond d'écran, raccourcis). Tout vit dans le profil (ou sa ruche) : rien à
+nettoyer, le retrait du client suffit. Données générées par `tools/New-PartData.ps1`.
+
+Validation VM (PART-W11-T, placement via ACC-SOURIS puis sonde du profil, retrait) :
+- Données : **5 recettes + 4 photos** copiées (Documents\Recettes, Pictures).
+- **4 icônes** sur le Bureau (Mes documents, Mes recettes, Mes photos, Internet=Edge réel).
+- **Favoris Edge** : fichier `Bookmarks` écrit, **4 URL** (MétéoMédia, Radio-Canada, Wikipédia,
+  Ricardo). UTF-8 sans BOM, jamais écrasé s'il existe déjà.
+- **Fond d'écran** posé dans la ruche (image Windows choisie par compte, ici `img19.jpg`).
+- **Logiciels simulés** : entrée « Applications installées » (HKCU Uninstall, ex. « Recettes &
+  Cie »), dossier d'installation et raccourci menu Démarrer, tous dans le profil.
+
+À faire ensuite (déclinaison) : tgagnon, sroy, bdionne (**standard**, fils admin), couellet
+(famille, compte partagé) — même mécanisme, contenu et logiciels propres à chaque persona.
+
 ## Idée en attente
 
 - **ACC-ENVERS** (prank « tout à l'envers » : rotation 180° + souris inversée + capture en fond

@@ -278,6 +278,103 @@ function Copy-PartMissingData {
     return $n
 }
 
+function Get-PartWallpaper {
+    <# Fond d'écran du client : le chemin préféré s'il existe, sinon une image Windows intégrée
+       choisie de façon déterministe par compte (différente d'un client à l'autre), sinon $null. #>
+    param([string]$Prefere, [Parameter(Mandatory)][string]$Compte)
+    if ($Prefere -and (Test-Path -LiteralPath $Prefere)) { return $Prefere }
+    $cand = @(Get-ChildItem -Path 'C:\Windows\Web\Wallpaper' -Recurse -Include '*.jpg', '*.png' -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty FullName | Sort-Object)
+    if (-not $cand) {
+        $def = 'C:\Windows\Web\Wallpaper\Windows\img0.jpg'
+        if (Test-Path -LiteralPath $def) { return $def }
+        return $null
+    }
+    $h = 0; foreach ($c in $Compte.ToCharArray()) { $h = (($h * 31) + [int]$c) -band 0x7fffffff }
+    return $cand[$h % $cand.Count]
+}
+
+function Write-PartEdgeFavorites {
+    <# Pré-remplit les favoris Edge (fichier Bookmarks du profil Default). N'écrase jamais un
+       fichier existant (favoris déjà posés par l'élève). JSON écrit à la main pour garantir un
+       tableau « children » même avec un seul favori, en UTF-8 sans BOM (lu par Edge). #>
+    param([Parameter(Mandatory)][string]$ProfilePath, [object[]]$Favoris)
+    if (-not $Favoris) { return $false }
+    $dir = Join-Path $ProfilePath 'AppData\Local\Microsoft\Edge\User Data\Default'
+    $file = Join-Path $dir 'Bookmarks'
+    if (Test-Path -LiteralPath $file) { return $false }
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $id = 2
+    $items = foreach ($f in $Favoris) {
+        $nm = ($f.Nom -replace '\\', '\\\\' -replace '"', '\"')
+        $u = ($f.Url -replace '\\', '\\\\' -replace '"', '\"')
+        '{"date_added":"0","id":"' + $id + '","name":"' + $nm + '","type":"url","url":"' + $u + '"}'
+        $id++
+    }
+    $barre = $items -join ','
+    $json = '{"checksum":"","roots":{' +
+        '"bookmark_bar":{"children":[' + $barre + '],"date_added":"0","date_modified":"0","id":"1","name":"Barre de favoris","type":"folder"},' +
+        '"other":{"children":[],"date_added":"0","date_modified":"0","id":"100","name":"Autres favoris","type":"folder"},' +
+        '"synced":{"children":[],"date_added":"0","date_modified":"0","id":"101","name":"Favoris mobiles","type":"folder"}},"version":1}'
+    [IO.File]::WriteAllText($file, $json, (New-Object System.Text.UTF8Encoding($false)))
+    return $true
+}
+
+function Set-PartSimulatedApp {
+    <# « Logiciel installé » propre au client : entrée Applications (HKCU Uninstall, dans la ruche),
+       dossier d'installation et raccourci menu Démarrer, tous DANS le profil -> retirés avec lui.
+       Inoffensif (aucun exécutable actif, juste de l'apparence). #>
+    param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$ProfilePath, [Parameter(Mandatory)]$App)
+    $key = Join-Path $Root "Software\Microsoft\Windows\CurrentVersion\Uninstall\$($App.Id)"
+    $instDir = Join-Path $ProfilePath "AppData\Local\Programs\$($App.Id)"
+    Set-LabRegistryValue -Path $key -Name 'DisplayName' -Value $App.Nom -Type String
+    Set-LabRegistryValue -Path $key -Name 'DisplayVersion' -Value ([string]$App.Version) -Type String
+    Set-LabRegistryValue -Path $key -Name 'Publisher' -Value $App.Editeur -Type String
+    Set-LabRegistryValue -Path $key -Name 'InstallLocation' -Value $instDir -Type String
+    Set-LabRegistryValue -Path $key -Name 'NoModify' -Value 1 -Type DWord
+    Set-LabRegistryValue -Path $key -Name 'NoRepair' -Value 1 -Type DWord
+    if (-not (Test-Path -LiteralPath $instDir)) { New-Item -ItemType Directory -Path $instDir -Force | Out-Null }
+    Set-Content -LiteralPath (Join-Path $instDir 'lisezmoi.txt') -Value "$($App.Nom) $($App.Version) - $($App.Editeur)" -Encoding UTF8
+    $lnk = Join-Path $ProfilePath "AppData\Roaming\Microsoft\Windows\Start Menu\Programs\$($App.Nom).lnk"
+    New-ABShortcut -Path $lnk -Target (Join-Path $instDir 'lisezmoi.txt')
+}
+
+function Set-PartClientProfileExtras {
+    <#
+    Rend le profil crédible (au-delà des données) : fond d'écran, icônes du Bureau, favoris Edge,
+    « logiciels installés » (mixte : raccourcis vers le réel présent + applis simulées). Idempotent.
+    Tout vit dans le profil (ou sa ruche) : rien à nettoyer à part le retrait du client.
+    #>
+    param([Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][string]$ProfilePath, [Parameter(Mandatory)]$Client)
+    $wp = Get-PartWallpaper -Prefere ([string]$Client['FondEcran']) -Compte $Compte
+    $apps = @(); if ($Client.Contains('Logiciels')) { $apps = @($Client.Logiciels) }
+    Invoke-ABUserHive -Compte $Compte -ScriptBlock {
+        param($Root)
+        if ($wp) { Set-ABUserShellSetting -Root $Root -Wallpaper $wp }
+        foreach ($a in $apps) { if ($a) { Set-PartSimulatedApp -Root $Root -ProfilePath $ProfilePath -App $a } }
+    }
+    # Raccourcis du Bureau (hors ruche). Cible : 'EDGE', 'LIBREOFFICE', ou chemin avec %PROFIL%.
+    $raccourcis = @(); if ($Client.Contains('Raccourcis')) { $raccourcis = @($Client.Raccourcis) }
+    foreach ($r in $raccourcis) {
+        $cible = [string]$r.Cible
+        if ($cible -eq 'EDGE') { $cible = Get-PartEdgePath }
+        elseif ($cible -eq 'LIBREOFFICE') { $cible = Find-ABProgram -Exe 'soffice.exe' }
+        else { $cible = $cible.Replace('%PROFIL%', $ProfilePath) }
+        if (-not $cible) { continue }   # logiciel réel absent : on saute ce raccourci
+        New-ABShortcut -Path (Join-Path $ProfilePath "Desktop\$($r.Nom).lnk") -Target $cible -Arguments ([string]$r['Arguments']) -Icon ([string]$r['Icone'])
+    }
+    $owner = "$env:COMPUTERNAME\$Compte"
+    foreach ($glob in 'Desktop\*.lnk', 'AppData\Roaming\Microsoft\Windows\Start Menu\Programs\*.lnk') {
+        $p = Join-Path $ProfilePath $glob
+        if (Get-ChildItem -LiteralPath (Split-Path -Parent $p) -Filter (Split-Path -Leaf $p) -ErrorAction SilentlyContinue) {
+            & icacls.exe $p /setowner $owner /C /Q | Out-Null
+        }
+    }
+    # Favoris Edge (fichier Bookmarks du profil).
+    $fav = @(); if ($Client.Contains('Favoris')) { $fav = @($Client.Favoris) }
+    $null = Write-PartEdgeFavorites -ProfilePath $ProfilePath -Favoris $fav
+}
+
 function Initialize-PartClient {
     <# Place le client sur le poste s'il est absent; sinon ne touche à rien. Retourne le chemin du profil. #>
     param([Parameter(Mandatory)][string]$Compte)
@@ -297,6 +394,8 @@ function Initialize-PartClient {
     }
     $n = Copy-PartMissingData -Compte $Compte -ProfilePath $path
     if ($n) { Write-LabOK "$n fichiers de données copiés." }
+    Set-PartClientProfileExtras -Compte $Compte -ProfilePath $path -Client $client
+    Write-LabOK 'Profil enrichi : fond d''écran, icônes, favoris Edge, logiciels.'
     return $path
 }
 

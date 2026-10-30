@@ -14,8 +14,29 @@
     # Admin = $true : le client est administrateur de son ordinateur (cas typique d'un particulier).
     # Mot de passe « prénom + année + ! » : réaliste, et conforme à la politique AB (12, complexe)
     # si le client est placé sur un poste AB.
+    # FondEcran : chemin précis (sinon une image Windows intégrée est choisie par compte).
+    # Raccourcis (Bureau) : Cible = 'EDGE', 'LIBREOFFICE' (réel, sauté si absent) ou chemin avec %PROFIL%.
+    # Favoris : marque-pages Edge (sites neutres). Logiciels : applis « installées » (réel + simulé).
     Clients = @(
-        @{ Compte = 'mbelanger'; NomComplet = 'Monique Bélanger'; Description = 'Retraitée'; Admin = $true; MotDePasse = 'Monique1952!' }
+        @{
+            Compte = 'mbelanger'; NomComplet = 'Monique Bélanger'; Description = 'Retraitée'; Admin = $true; MotDePasse = 'Monique1952!'
+            Raccourcis = @(
+                @{ Nom = 'Mes documents'; Cible = '%PROFIL%\Documents' }
+                @{ Nom = 'Mes recettes'; Cible = '%PROFIL%\Documents\Recettes' }
+                @{ Nom = 'Mes photos'; Cible = '%PROFIL%\Pictures' }
+                @{ Nom = 'Internet'; Cible = 'EDGE' }
+            )
+            Favoris = @(
+                @{ Nom = 'MétéoMédia'; Url = 'https://www.meteomedia.com' }
+                @{ Nom = 'Radio-Canada'; Url = 'https://ici.radio-canada.ca' }
+                @{ Nom = 'Wikipédia'; Url = 'https://fr.wikipedia.org' }
+                @{ Nom = 'Ricardo Cuisine'; Url = 'https://www.ricardocuisine.com' }
+            )
+            Logiciels = @(
+                @{ Id = 'RecettesCie'; Nom = 'Recettes & Cie'; Version = '4.2'; Editeur = 'Cuisine Logiciels inc.' }
+                @{ Id = 'AlbumPhotoFamille'; Nom = 'Album Photo Famille'; Version = '2.1'; Editeur = 'PixFamille' }
+            )
+        }
     )
 
     # Catalogue des pannes réalisées (Pannes\<Id>.ps1). Portee : Machine ou Profil.

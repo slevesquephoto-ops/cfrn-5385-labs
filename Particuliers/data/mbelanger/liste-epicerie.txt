@@ -1,0 +1,9 @@
+﻿Épicerie
+
+- lait
+- oeufs
+- pain
+- pommes
+- café
+- fromage
+- papier essuie-tout
