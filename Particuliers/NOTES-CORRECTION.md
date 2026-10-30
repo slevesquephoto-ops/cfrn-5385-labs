@@ -248,8 +248,23 @@ favoris (Wikipédia, Support Microsoft, Comment Ça Marche, Les Numériques), 3 
 (WinTweaker, GameBooster FX, Benchmark Studio). Fond d'écran `ThemeC\img29.jpg` (distinct de
 celui de Monique → sélection déterministe par compte confirmée).
 
-À faire ensuite (déclinaison) : tgagnon, sroy, bdionne (**standard**, fils admin), couellet
-(famille, compte partagé) — et la liste reste ouverte (objectif : beaucoup de profils variés).
+**bdionne (Benoît Dionne, pêcheur — compte STANDARD) + aidant admin — validé VM le 2026-10-30.**
+Premier **compte standard** : un champ `Aidant` crée en plus un compte **administrateur** distinct
+(son fils mdionne, `C:\Users\mdionne`) → accès admin « en fiction » pour réparer les pannes
+punitives. Constat VM : client non-admin ✓, aidant admin avec profil ✓, données/icônes/favoris/
+logiciels (Cartes Marines Pro, Journal de Pêche) ✓, et à la **suppression** du client l'aidant est
+**aussi retiré** ✓.
+
+**Bug corrigé au passage — CPT-ADMIN et les comptes standard.** CPT-ADMIN (« client retiré des
+Administrateurs ») détectait sa présence par « le client n'est pas admin » : pour un client
+standard, c'est l'état NORMAL → faux positif au Verifier (`echecs:[CPT-ADMIN]`). Correctif général :
+marqueur `AdminSeulement = $true` sur la panne ; `Install-PartPanne` la refuse proprement sur un
+compte standard ; `Get-PartVerification` l'ignore pour ces comptes. (Accès à la clé via
+`.Contains('AdminSeulement')` car le module est en StrictMode — l'accès direct à une clé absente y
+lève une erreur.)
+
+À faire ensuite (déclinaison) : tgagnon, sroy, couellet (famille, compte partagé) — et la liste
+reste ouverte (objectif : beaucoup de profils variés).
 
 ## Idée en attente
 

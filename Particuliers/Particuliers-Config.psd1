@@ -57,6 +57,29 @@
                 @{ Id = 'BenchmarkStudio'; Nom = 'Benchmark Studio'; Version = '1.2'; Editeur = 'BenchWorks' }
             )
         }
+        @{
+            # Client STANDARD : il n'est pas administrateur. Son fils (Aidant) est un compte
+            # administrateur distinct sur la machine -> l'élève s'en sert pour réparer les pannes
+            # punitives (session du client bloquée). L'aidant est créé avec le client, retiré avec lui.
+            Compte = 'bdionne'; NomComplet = 'Benoît Dionne'; Description = 'Pêcheur côtier'; Admin = $false; MotDePasse = 'Benoit1968!'
+            Aidant = @{ Compte = 'mdionne'; NomComplet = 'Marc Dionne'; Description = 'Fils de Benoît (administrateur)'; MotDePasse = 'Marc1992!' }
+            Raccourcis = @(
+                @{ Nom = 'Mes documents'; Cible = '%PROFIL%\Documents' }
+                @{ Nom = 'Papiers du bateau'; Cible = '%PROFIL%\Documents\Bateau' }
+                @{ Nom = 'Mes photos'; Cible = '%PROFIL%\Pictures' }
+                @{ Nom = 'Internet'; Cible = 'EDGE' }
+            )
+            Favoris = @(
+                @{ Nom = 'MétéoMédia'; Url = 'https://www.meteomedia.com' }
+                @{ Nom = 'Pêches et Océans Canada'; Url = 'https://www.dfo-mpo.gc.ca' }
+                @{ Nom = 'Marées et niveaux d''eau'; Url = 'https://www.marees.gc.ca' }
+                @{ Nom = 'Radio-Canada'; Url = 'https://ici.radio-canada.ca' }
+            )
+            Logiciels = @(
+                @{ Id = 'CartesMarines'; Nom = 'Cartes Marines Pro'; Version = '7.1'; Editeur = 'NaviSoft' }
+                @{ Id = 'JournalDePeche'; Nom = 'Journal de Pêche'; Version = '2.0'; Editeur = 'MerLogiciels' }
+            )
+        }
     )
 
     # Catalogue des pannes réalisées (Pannes\<Id>.ps1). Portee : Machine ou Profil.
@@ -193,7 +216,7 @@
             Incompatibles = @()
         }
         @{
-            Id = 'CPT-ADMIN'; Titre = 'Client retiré des Administrateurs'; Portee = 'Profil'; Duree = '10 / 15'; Difficulte = 2
+            Id = 'CPT-ADMIN'; Titre = 'Client retiré des Administrateurs'; Portee = 'Profil'; Duree = '10 / 15'; Difficulte = 2; AdminSeulement = $true
             Recit = 'Je ne peux plus rien installer ni changer les réglages : tout me demande un mot de passe administrateur.'
             Cause = 'Compte du client retiré du groupe Administrateurs (clients administrateurs seulement).'
             Correction = 'Depuis un autre compte administrateur : Paramètres > Comptes, ou lusrmgr.msc, pour remettre le client dans le groupe Administrateurs.'

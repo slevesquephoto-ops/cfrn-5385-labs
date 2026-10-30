@@ -115,6 +115,29 @@ $sets = @{
         )
         @{ Textes = $textes; Photos = $photos }
     }
+
+    bdionne = {
+        $textes = @(
+            @{ S = 'Bateau\immatriculation.txt'; T = 'Documents\Bateau\immatriculation.txt'; C = '2022-04-12'; M = '2022-04-12'
+               X = "IMMATRICULATION DU BATEAU`n`nNom : Le Grand Large`nNumero : QC-4821-AB`nLongueur : 8,5 m`nAnnee : 2016`nPort d'attache : Rimouski`n`n(Renouveler l'immatriculation avant le 30 avril chaque annee.)" }
+            @{ S = 'Bateau\permis-peche.txt'; T = 'Documents\Bateau\permis-peche.txt'; C = '2023-03-01'; M = '2025-02-28'
+               X = "PERMIS DE PECHE`n`nTitulaire : Benoit Dionne`nType : peche cotiere`nEspeces : maquereau, hareng`nValide jusqu'au : 31 mars`n`nGarder une copie a bord en tout temps." }
+            @{ S = 'Bateau\assurance-bateau.txt'; T = 'Documents\Bateau\assurance-bateau.txt'; C = '2024-05-10'; M = '2024-05-10'
+               X = "ASSURANCE DU BATEAU`n`nAssureur : Assurances Maritimes du Golfe`nPolice : MAR-55210`nCouverture : collision, incendie, vol`nRenouvellement : 10 mai`nTelephone : 418-555-0150" }
+            @{ S = 'depenses-carburant.csv'; T = 'Documents\depenses-carburant.csv'; C = '2025-01-05'; M = '2025-03-02'
+               X = "Date;Litres;Montant`n2025-01-08;120;198`n2025-01-22;140;231`n2025-02-05;110;182`n2025-02-19;150;248`n2025-03-01;130;215" }
+            @{ S = 'contacts-port.txt'; T = 'Documents\contacts-port.txt'; C = '2023-06-15'; M = '2024-11-20'
+               X = "Contacts`n`n- Capitainerie du port : 418-555-0160`n- Mecanicien (moteur) : 418-555-0171`n- Poissonnerie (acheteur) : 418-555-0182`n- Marc (mon fils) : 418-555-0199`n- Garde cotiere (urgence) : 1-800-565-1582" }
+            @{ S = 'liste-equipement.txt'; T = 'Documents\liste-equipement.txt'; C = '2024-04-02'; M = '2024-04-02'
+               X = "Equipement a verifier avant la saison`n`n- Gilets de sauvetage (x4)`n- Fusees de detresse`n- Radio VHF`n- GPS / sondeur`n- Pompe de cale`n- Trousse de premiers soins`n- Ancre et cordages" }
+        )
+        $photos = @(
+            @{ S = 'Photos\mon-bateau.jpg'; T = 'Pictures\mon-bateau.jpg'; C = '2024-06-20'; M = '2024-06-20'; L = 'Le Grand Large'; A = 'Navy'; B = 'CadetBlue' }
+            @{ S = 'Photos\prise-du-jour.jpg'; T = 'Pictures\prise-du-jour.jpg'; C = '2024-07-15'; M = '2024-07-15'; L = 'La prise du jour'; A = 'Teal'; B = 'SlateGray' }
+            @{ S = 'Photos\quai-matin.jpg'; T = 'Pictures\quai-matin.jpg'; C = '2024-08-09'; M = '2024-08-09'; L = 'Le quai au matin'; A = 'DarkSlateBlue'; B = 'LightSteelBlue' }
+        )
+        @{ Textes = $textes; Photos = $photos }
+    }
 }
 
 if (-not $sets.ContainsKey($Compte)) { throw "Aucun jeu de données défini pour '$Compte'. Clients connus : $(($sets.Keys) -join ', ')." }

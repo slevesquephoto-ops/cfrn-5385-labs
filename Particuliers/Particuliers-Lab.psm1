@@ -396,7 +396,23 @@ function Initialize-PartClient {
     if ($n) { Write-LabOK "$n fichiers de données copiés." }
     Set-PartClientProfileExtras -Compte $Compte -ProfilePath $path -Client $client
     Write-LabOK 'Profil enrichi : fond d''écran, icônes, favoris Edge, logiciels.'
+    if ($client.Contains('Aidant') -and $client.Aidant) { $null = Set-PartAidant -Aidant $client.Aidant }
     return $path
+}
+
+function Set-PartAidant {
+    <# Compte « aidant » administrateur créé AVEC un client standard (ex. le fils d'un pêcheur) :
+       c'est l'accès administrateur « en fiction » que l'élève utilise pour réparer les pannes
+       punitives. Compte + profil minimal, retirés avec le client. Idempotent. #>
+    param([Parameter(Mandatory)]$Aidant)
+    $obj = [pscustomobject]@{
+        Compte = $Aidant.Compte; NomComplet = $Aidant.NomComplet; Description = $Aidant.Description
+        MotDePasse = $Aidant.MotDePasse; Admin = $true
+    }
+    if (Set-PartClientAccount -Client $obj) { Write-LabOK "Compte aidant créé : $($Aidant.Compte) ($($Aidant.NomComplet), administrateur)" }
+    $p = Get-PartProfilePath -Compte $Aidant.Compte
+    if (-not $p) { $p = New-ABUserProfile -Compte $Aidant.Compte; Write-LabOK "Profil aidant créé : $p" }
+    return $p
 }
 
 function Test-PartClient {
@@ -456,8 +472,11 @@ function Invoke-PartWithContext {
 # ---------------------------------------------------------------------------
 function Install-PartPanne {
     param([Parameter(Mandatory)][string]$Compte, [Parameter(Mandatory)][string]$Id)
-    $null = Get-PartClient -Compte $Compte
+    $client = Get-PartClient -Compte $Compte
     $panne = Get-PartPanne -Id $Id
+    if ($panne.Contains('AdminSeulement') -and $panne.AdminSeulement -and -not $client.Admin) {
+        throw "$Id ne s'applique qu'à un client administrateur : $Compte est un compte standard."
+    }
     $scenario = Get-PartStateName -Compte $Compte -Id $Id
     if (Get-LabState -Scenario $scenario) { Write-LabOK "$Id déjà installée pour $Compte : rien à refaire."; return }
 
@@ -524,7 +543,7 @@ function Remove-PartClient {
     le compte est supprimé quand même et le profil est mis en attente (Clear-PartPendingProfile).
     #>
     param([Parameter(Mandatory)][string]$Compte)
-    $null = Get-PartClient -Compte $Compte
+    $cl = Get-PartClient -Compte $Compte
     foreach ($i in @(Get-PartInstalled -Compte $Compte)) { Remove-PartPanne -Compte $Compte -Id $i.Id }
     Write-LabStep "Suppression du client $Compte"
     $u = Get-LocalUser -Name $Compte -ErrorAction SilentlyContinue
@@ -539,7 +558,30 @@ function Remove-PartClient {
         Remove-LocalUser -Name $Compte
         Write-LabOK "Compte $Compte supprimé."
     } else { Write-LabOK "$Compte absent du poste." }
+    if ($cl.Contains('Aidant') -and $cl.Aidant) { Remove-PartAidant -Aidant $cl.Aidant -Sauf $Compte }
     Restore-PartPoste
+}
+
+function Remove-PartAidant {
+    <# Retire le compte aidant d'un client, sauf si un AUTRE client encore présent le partage. #>
+    param([Parameter(Mandatory)]$Aidant, [Parameter(Mandatory)][string]$Sauf)
+    $aide = $Aidant.Compte
+    $partage = @((Get-PartConfig).Clients | Where-Object {
+            $_.Compte -ne $Sauf -and $_.Contains('Aidant') -and $_.Aidant.Compte -eq $aide -and
+            (Get-LocalUser -Name $_.Compte -ErrorAction SilentlyContinue)
+        })
+    if ($partage) { return }
+    $ua = Get-LocalUser -Name $aide -ErrorAction SilentlyContinue
+    if (-not $ua) { return }
+    $pa = Get-PartProfilePath -Compte $aide
+    try {
+        Remove-ABUserProfile -Compte $aide
+    } catch {
+        Add-PartPendingProfile -Compte $aide -Sid $ua.SID.Value -Chemin $pa
+        Write-LabWarn "Windows retient encore le profil de l'aidant $aide : supprimé au prochain lancement après un redémarrage."
+    }
+    Remove-LocalUser -Name $aide
+    Write-LabOK "Compte aidant $aide supprimé."
 }
 
 # ---------------------------------------------------------------------------
@@ -600,6 +642,9 @@ function Get-PartVerification {
         $checks += Invoke-PartWithContext -Compte $Compte -ScriptBlock {
             param($ctx)
             foreach ($p in $pannes) {
+                # Panne réservée aux clients administrateurs : sans objet pour un compte standard
+                # (sinon l'état « normal » non-admin ressemble à la panne -> faux positif).
+                if ($p.Contains('AdminSeulement') -and $p.AdminSeulement -and -not $ctx.Client.Admin) { continue }
                 try {
                     $t = & $p.Blocs.Tester $ctx
                     New-LabCheck -Name $p.Id -Passed ([bool]$t.Ok) -Detail ([string]$t.Detail)

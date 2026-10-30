@@ -41,6 +41,12 @@ profils variés). Chaque nouveau client = un jeu de données dans `tools/New-Par
 entrée dans `Particuliers-Config.psd1` (compte, type, données, fond d'écran, raccourcis, favoris,
 logiciels).
 
+**Comptes standard et « aidant ».** Un client peut être un compte **standard** (`Admin = $false`,
+ex. bdionne). Dans ce cas, un champ `Aidant` crée **en plus** un compte **administrateur** distinct
+sur la machine (ex. son fils mdionne) : c'est l'accès admin « en fiction » que l'élève utilise pour
+réparer les pannes punitives quand la session du client est bloquée. L'aidant (compte + profil) est
+créé avec le client et retiré avec lui (sauf s'il est partagé par un autre client encore présent).
+
 - Mots de passe : fictifs, simples et réalistes pour un particulier, documentés dans
   `Particuliers/README-Clients.txt` (règle 8 du dépôt).
 - Le compte `couellet` a pour nom complet « Famille Ouellet ».
