@@ -37,6 +37,26 @@
                 @{ Id = 'AlbumPhotoFamille'; Nom = 'Album Photo Famille'; Version = '2.1'; Editeur = 'PixFamille' }
             )
         }
+        @{
+            Compte = 'jblais'; NomComplet = 'Julien Blais'; Description = 'Expérimentateur (bidouilleur)'; Admin = $true; MotDePasse = 'Julien1995!'
+            Raccourcis = @(
+                @{ Nom = 'Mes bidouilles'; Cible = '%PROFIL%\Documents\Trucs' }
+                @{ Nom = 'Téléchargements'; Cible = '%PROFIL%\Downloads' }
+                @{ Nom = 'Mes captures'; Cible = '%PROFIL%\Pictures' }
+                @{ Nom = 'Internet'; Cible = 'EDGE' }
+            )
+            Favoris = @(
+                @{ Nom = 'Wikipédia'; Url = 'https://fr.wikipedia.org' }
+                @{ Nom = 'Support Microsoft'; Url = 'https://support.microsoft.com/fr-ca' }
+                @{ Nom = 'Comment Ça Marche'; Url = 'https://www.commentcamarche.net' }
+                @{ Nom = 'Les Numériques'; Url = 'https://www.lesnumeriques.com' }
+            )
+            Logiciels = @(
+                @{ Id = 'WinTweaker'; Nom = 'WinTweaker'; Version = '5.0'; Editeur = 'TweakSoft' }
+                @{ Id = 'GameBoosterFX'; Nom = 'GameBooster FX'; Version = '3.4'; Editeur = 'FX Labs' }
+                @{ Id = 'BenchmarkStudio'; Nom = 'Benchmark Studio'; Version = '1.2'; Editeur = 'BenchWorks' }
+            )
+        }
     )
 
     # Catalogue des pannes réalisées (Pannes\<Id>.ps1). Portee : Machine ou Profil.

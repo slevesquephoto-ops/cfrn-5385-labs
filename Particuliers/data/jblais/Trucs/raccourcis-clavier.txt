@@ -1,0 +1,6 @@
+﻿Raccourcis pratiques
+
+- Win + R : executer
+- Win + X : menu systeme
+- Ctrl + Maj + Echap : gestionnaire des taches
+- Win + Pause : infos systeme

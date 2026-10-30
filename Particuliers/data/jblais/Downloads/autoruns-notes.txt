@@ -1,0 +1,3 @@
+﻿Notes sur Autoruns
+
+Outil qui montre TOUT ce qui demarre avec Windows (plus complet que le gestionnaire des taches). Pratique pour voir ce que j'ai ajoute... et retirer.

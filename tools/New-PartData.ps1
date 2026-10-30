@@ -87,6 +87,34 @@ $sets = @{
         )
         @{ Textes = $textes; Photos = $photos }
     }
+
+    jblais = {
+        $textes = @(
+            @{ S = 'Trucs\tweaks-registre.txt'; T = 'Documents\Trucs\tweaks-registre.txt'; C = '2024-11-02'; M = '2025-02-20'
+               X = "MES TWEAKS DE REGISTRE (a garder!)`n`n- Afficher les extensions de fichiers : HideFileExt = 0`n- Menu demarrer classique : essaye plusieurs cles, pas sur que ca marche`n- Desactiver la telemetrie : touche plein de trucs dans Policies`n- Accelerer le menu : MenuShowDelay = 0`n`nATTENTION : noter ce que je change AVANT, sinon je m'y retrouve plus..." }
+            @{ S = 'Trucs\notes-overclock.txt'; T = 'Documents\Trucs\notes-overclock.txt'; C = '2024-12-10'; M = '2024-12-10'
+               X = "Overclock / performance`n`n- Mode haute performance dans les options d'alimentation`n- Desactiver les effets visuels (SystemPropertiesPerformance)`n- Jouer dans msconfig > Demarrer (j'ai peut-etre trop coche de choses)`n- Memoire max dans msconfig : a NE PAS toucher, ca a deja mal tourne" }
+            @{ S = 'Trucs\commandes-utiles.txt'; T = 'Documents\Trucs\commandes-utiles.txt'; C = '2025-01-15'; M = '2025-01-15'
+               X = "Commandes que j'utilise`n`n- sfc /scannow (repare les fichiers systeme)`n- ipconfig /flushdns`n- chkdsk`n- services.msc (pour activer/desactiver des services)`n- regedit`n- msconfig`n- bcdedit (dangereux parait-il)" }
+            @{ S = 'Trucs\raccourcis-clavier.txt'; T = 'Documents\Trucs\raccourcis-clavier.txt'; C = '2024-10-05'; M = '2024-10-05'
+               X = "Raccourcis pratiques`n`n- Win + R : executer`n- Win + X : menu systeme`n- Ctrl + Maj + Echap : gestionnaire des taches`n- Win + Pause : infos systeme" }
+            @{ S = 'a-reparer.txt'; T = 'Documents\a-reparer.txt'; C = '2025-02-18'; M = '2025-03-01'
+               X = "CHOSES QUE J'AI BRISEES (a reparer quand j'aurai le temps)`n`n1. Le son ne marche plus depuis que j'ai joue dans les services.`n2. Le demarrage est super lent, j'ai mis plein d'affaires au demarrage.`n3. Une de mes modifs a bloque le panneau de configuration je pense.`n4. J'ai change un truc de reseau, des fois ca marche pas.`n`nNote a moi-meme : ARRETER de tout changer sans noter avant !!!" }
+            @{ S = 'liste-logiciels.txt'; T = 'Documents\liste-logiciels.txt'; C = '2024-09-20'; M = '2025-01-30'
+               X = "Logiciels installes`n`n- WinTweaker (optimisation)`n- GameBooster FX`n- Benchmark Studio`n- LibreOffice`n- Edge`n`nA essayer : un autre nettoyeur, un gestionnaire de demarrage" }
+            @{ S = 'Downloads\wintweaker-lisezmoi.txt'; T = 'Downloads\wintweaker-lisezmoi.txt'; C = '2024-09-20'; M = '2024-09-20'
+               X = "WinTweaker 5.0 - Lisez-moi`n`nOptimisez votre PC en un clic ! Nettoie, accelere, booste.`n(Fichier de laboratoire - logiciel fictif, aucune fonction reelle.)" }
+            @{ S = 'Downloads\guide-boost-fps.txt'; T = 'Downloads\guide-boost-fps.txt'; C = '2024-12-01'; M = '2024-12-01'
+               X = "Guide : plus de FPS dans mes jeux`n`n1. Mode haute performance`n2. Fermer les applis en arriere-plan`n3. Mettre a jour les pilotes`n4. Baisser les details graphiques`n(Trouve sur un forum, pas tout teste.)" }
+            @{ S = 'Downloads\autoruns-notes.txt'; T = 'Downloads\autoruns-notes.txt'; C = '2025-01-22'; M = '2025-01-22'
+               X = "Notes sur Autoruns`n`nOutil qui montre TOUT ce qui demarre avec Windows (plus complet que le gestionnaire des taches). Pratique pour voir ce que j'ai ajoute... et retirer." }
+        )
+        $photos = @(
+            @{ S = 'Captures\benchmark.jpg'; T = 'Pictures\benchmark.jpg'; C = '2024-12-11'; M = '2024-12-11'; L = 'Benchmark avant/apres'; A = 'MidnightBlue'; B = 'DarkCyan' }
+            @{ S = 'Captures\mon-setup.jpg'; T = 'Pictures\mon-setup.jpg'; C = '2025-01-05'; M = '2025-01-05'; L = 'Mon setup'; A = 'Indigo'; B = 'DeepPink' }
+        )
+        @{ Textes = $textes; Photos = $photos }
+    }
 }
 
 if (-not $sets.ContainsKey($Compte)) { throw "Aucun jeu de données défini pour '$Compte'. Clients connus : $(($sets.Keys) -join ', ')." }

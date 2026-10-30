@@ -1,0 +1,7 @@
+﻿Guide : plus de FPS dans mes jeux
+
+1. Mode haute performance
+2. Fermer les applis en arriere-plan
+3. Mettre a jour les pilotes
+4. Baisser les details graphiques
+(Trouve sur un forum, pas tout teste.)

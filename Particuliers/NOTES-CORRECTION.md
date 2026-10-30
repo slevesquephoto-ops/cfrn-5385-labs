@@ -242,8 +242,14 @@ Validation VM (PART-W11-T, placement via ACC-SOURIS puis sonde du profil, retrai
 - **Logiciels simulés** : entrée « Applications installées » (HKCU Uninstall, ex. « Recettes &
   Cie »), dossier d'installation et raccourci menu Démarrer, tous dans le profil.
 
+**jblais (Julien Blais, expérimentateur) — validé VM le 2026-10-30.** Même mécanisme : 6 fichiers
+Documents (tweaks, overclock, `a-reparer.txt`) + 3 Téléchargements + 2 photos, 4 icônes Bureau, 4
+favoris (Wikipédia, Support Microsoft, Comment Ça Marche, Les Numériques), 3 logiciels simulés
+(WinTweaker, GameBooster FX, Benchmark Studio). Fond d'écran `ThemeC\img29.jpg` (distinct de
+celui de Monique → sélection déterministe par compte confirmée).
+
 À faire ensuite (déclinaison) : tgagnon, sroy, bdionne (**standard**, fils admin), couellet
-(famille, compte partagé) — même mécanisme, contenu et logiciels propres à chaque persona.
+(famille, compte partagé) — et la liste reste ouverte (objectif : beaucoup de profils variés).
 
 ## Idée en attente
 

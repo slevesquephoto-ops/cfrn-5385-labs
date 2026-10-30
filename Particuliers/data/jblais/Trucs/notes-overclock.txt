@@ -1,0 +1,6 @@
+﻿Overclock / performance
+
+- Mode haute performance dans les options d'alimentation
+- Desactiver les effets visuels (SystemPropertiesPerformance)
+- Jouer dans msconfig > Demarrer (j'ai peut-etre trop coche de choses)
+- Memoire max dans msconfig : a NE PAS toucher, ca a deja mal tourne

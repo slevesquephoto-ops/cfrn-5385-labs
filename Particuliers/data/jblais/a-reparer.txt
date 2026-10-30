@@ -1,0 +1,8 @@
+﻿CHOSES QUE J'AI BRISEES (a reparer quand j'aurai le temps)
+
+1. Le son ne marche plus depuis que j'ai joue dans les services.
+2. Le demarrage est super lent, j'ai mis plein d'affaires au demarrage.
+3. Une de mes modifs a bloque le panneau de configuration je pense.
+4. J'ai change un truc de reseau, des fois ca marche pas.
+
+Note a moi-meme : ARRETER de tout changer sans noter avant !!!

@@ -1,0 +1,9 @@
+﻿Logiciels installes
+
+- WinTweaker (optimisation)
+- GameBooster FX
+- Benchmark Studio
+- LibreOffice
+- Edge
+
+A essayer : un autre nettoyeur, un gestionnaire de demarrage

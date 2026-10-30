@@ -34,6 +34,12 @@ choisit, sur n'importe quel poste du labo, **un client et une ou plusieurs panne
 | sroy | Sylvie Roy, couturière à son compte | Administrateur | Factures, soumissions, comptabilité (`.ods`), patrons |
 | bdionne | Benoît Dionne, pêcheur côtier | Standard (son fils est l'administrateur) | Photos du bateau, documents d'immatriculation, permis |
 | couellet | Famille Ouellet (compte partagé) | Administrateur | Un peu de tout, en désordre |
+| jblais | Julien Blais, expérimentateur qui bidouille partout et ne sait pas réparer ensuite | Administrateur | Tweaks de registre, notes d'overclock, outils téléchargés, « à réparer » |
+
+La liste de clients est **ouverte** : on en ajoute au besoin (objectif pédagogique = beaucoup de
+profils variés). Chaque nouveau client = un jeu de données dans `tools/New-PartData.ps1` + son
+entrée dans `Particuliers-Config.psd1` (compte, type, données, fond d'écran, raccourcis, favoris,
+logiciels).
 
 - Mots de passe : fictifs, simples et réalistes pour un particulier, documentés dans
   `Particuliers/README-Clients.txt` (règle 8 du dépôt).

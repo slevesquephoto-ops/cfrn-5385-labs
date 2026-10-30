@@ -1,0 +1,8 @@
+﻿MES TWEAKS DE REGISTRE (a garder!)
+
+- Afficher les extensions de fichiers : HideFileExt = 0
+- Menu demarrer classique : essaye plusieurs cles, pas sur que ca marche
+- Desactiver la telemetrie : touche plein de trucs dans Policies
+- Accelerer le menu : MenuShowDelay = 0
+
+ATTENTION : noter ce que je change AVANT, sinon je m'y retrouve plus...

@@ -1,0 +1,9 @@
+﻿Commandes que j'utilise
+
+- sfc /scannow (repare les fichiers systeme)
+- ipconfig /flushdns
+- chkdsk
+- services.msc (pour activer/desactiver des services)
+- regedit
+- msconfig
+- bcdedit (dangereux parait-il)
